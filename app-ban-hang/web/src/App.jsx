@@ -7,6 +7,7 @@ import Products from './pages/Products.jsx';
 import Customers from './pages/Customers.jsx';
 import Purchases from './pages/Purchases.jsx';
 import Reports from './pages/Reports.jsx';
+import Cash from './pages/Cash.jsx';
 import Settings from './pages/Settings.jsx';
 
 const SettingsCtx = createContext({});
@@ -36,6 +37,7 @@ const NAV = [
   { path: 'hang-hoa', icon: '📦', label: 'Hàng hoá', page: Products },
   { path: 'khach-hang', icon: '👥', label: 'Khách hàng', page: Customers },
   { path: 'nhap-hang', icon: '🚚', label: 'Nhập hàng', page: Purchases },
+  { path: 'thu-chi', icon: '💵', label: 'Thu chi', page: Cash },
   { path: 'bao-cao', icon: '📊', label: 'Báo cáo', page: Reports },
   { path: 'cai-dat', icon: '⚙️', label: 'Cài đặt', page: Settings },
 ];

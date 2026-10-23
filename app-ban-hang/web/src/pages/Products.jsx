@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
-import { get, post, put, del, imageUrl, getToken } from '../api.js';
+import { get, post, put, del, imageUrl, getToken, downloadUrl } from '../api.js';
 import { money, num, dateTime } from '../format.js';
 import { Field, Loading, Modal, MoneyInput, QtyInput, useAction, useLoad, useDebounced, resizeImage, confirmAsk, useToast } from '../components/ui.jsx';
 import Scanner from '../components/Scanner.jsx';
+import { ProductSearch } from '../components/Pickers.jsx';
+import LabelDialog, { labelItemsFromProduct } from '../components/Labels.jsx';
 import { useUser, isOwner, go } from '../App.jsx';
 import PriceLists from './PriceLists.jsx';
+import StockCount from './StockCount.jsx';
 
 const FILTERS = [['', 'Tất cả'], ['in', 'Còn hàng'], ['out', 'Hết hàng'], ['neg', 'Âm kho'], ['low', 'Tồn thấp']];
-const MOVE_NAMES = { sale: 'Bán hàng', cancel: 'Huỷ HĐ', return: 'Khách trả', purchase: 'Nhập hàng', supplier_return: 'Trả NCC', adjust: 'Cân bằng kho', init: 'Tồn đầu' };
+const MOVE_NAMES = { count: 'Kiểm kho', sale: 'Bán hàng', cancel: 'Huỷ HĐ', return: 'Khách trả', purchase: 'Nhập hàng', supplier_return: 'Trả NCC', adjust: 'Cân bằng kho', init: 'Tồn đầu' };
 
 function UnitsEditor({ f, setF, owner }) {
   const units = f.units ?? [];
@@ -51,12 +54,48 @@ function UnitsEditor({ f, setF, owner }) {
   );
 }
 
+// Thành phần combo: chọn món, số lượng tính theo ĐVT gốc của món đó.
+function ComboEditor({ f, setF, owner }) {
+  const items = f.combo_items ?? [];
+  const setItems = (combo_items) => setF({ ...f, combo_items });
+  const add = (p, unitId) => {
+    if (p.is_combo) return;
+    const factor = unitId ? p.units.find((u) => u.id === unitId)?.factor ?? 1 : 1;
+    const i = items.findIndex((x) => x.item_id === p.id);
+    if (i >= 0) setItems(items.map((x, j) => (j === i ? { ...x, qty: x.qty + factor } : x)));
+    else setItems([...items, { item_id: p.id, qty: factor, name: p.name, unit: p.unit, code: p.code, cost: p.cost, stock: p.stock }]);
+  };
+  const cost = items.reduce((s, x) => s + (x.cost ?? 0) * x.qty, 0);
+  return (
+    <div className="sumbox">
+      <b>Món trong combo</b> <small className="muted">(bán 1 combo thì kho trừ từng món bên dưới)</small>
+      {owner && <ProductSearch onPick={add} showCost autoFocus={false} continuousScan={false} />}
+      <div className="list">
+        {items.length === 0 && <div className="empty">Chưa có món nào. Tìm và chọn hàng ở ô trên.</div>}
+        {items.map((x, i) => (
+          <div key={x.item_id} className="list-item">
+            <span className="grow"><b>{x.name}</b><small className="muted block">{x.code}{x.stock !== undefined ? ` · Tồn: ${num(x.stock)} ${x.unit}` : ''}</small></span>
+            <span style={{ width: 90 }}><QtyInput disabled={!owner} value={x.qty} onChange={(qty) => setItems(items.map((y, j) => (j === i ? { ...y, qty } : y)))} /></span>
+            <small className="muted" style={{ minWidth: 40 }}>{x.unit}</small>
+            {owner && <button className="btn btn-sm btn-danger" onClick={() => setItems(items.filter((_, j) => j !== i))}>✕</button>}
+          </div>
+        ))}
+      </div>
+      {owner && items.length > 0 && items.every((x) => x.cost !== undefined) && (
+        <div className="row-between"><span>Giá vốn combo</span><b>{money(cost)}</b></div>
+      )}
+      {owner && f.price > 0 && cost > 0 && f.price < cost && <div className="warn">⚠️ Giá bán combo thấp hơn tổng giá vốn</div>}
+    </div>
+  );
+}
+
 function ProductForm({ id, categories, priceLists, onClose, onSaved, reloadCategories }) {
   const owner = isOwner(useUser());
   const [tab, setTab] = useState('info');
-  const [f, setF] = useState(id ? null : { name: '', code: '', barcode: '', unit: '', category_id: '', cost: 0, price: 0, stock: 0, min_stock: 0, track_stock: 1, active: 1, units: [], prices: {} });
+  const [f, setF] = useState(id ? null : { name: '', code: '', barcode: '', unit: '', category_id: '', cost: 0, price: 0, stock: 0, min_stock: 0, track_stock: 1, active: 1, is_combo: 0, combo_items: [], units: [], prices: {} });
   const [scan, setScan] = useState(false);
   const [stockEdit, setStockEdit] = useState(null);
+  const [labels, setLabels] = useState(null);
   const [run, busy] = useAction();
 
   const load = () => get(`/products/${id}`).then((p) => setF({ ...p, category_id: p.category_id ?? '', image_data: null }));
@@ -116,17 +155,20 @@ function ProductForm({ id, categories, priceLists, onClose, onSaved, reloadCateg
     >
       {id && (
         <div className="stock-head">
-          <div>Tồn kho: <b className={f.stock < 0 ? 'neg' : ''}>{num(f.stock)} {f.unit}</b>
+          {f.is_combo ? <div>Ráp được: <b>{num(f.stock)} {f.unit}</b> <small className="muted">(theo tồn các món bên trong)</small></div> : <div>Tồn kho: <b className={f.stock < 0 ? 'neg' : ''}>{num(f.stock)} {f.unit}</b>
             {f.units.map((u) => <small key={u.id} className="muted"> · {num(Math.floor((f.stock / u.factor) * 100) / 100)} {u.name}</small>)}
-          </div>
+          </div>}
           {owner && f.cost !== undefined && <div className="muted">Giá vốn: {money(f.cost)} · Nhập cuối: {money(f.last_cost)}</div>}
-          {owner && <button className="btn btn-sm" onClick={() => setStockEdit(f.stock)}>⚖️ Cân bằng kho</button>}
+          <div className="row gap">
+            {owner && !f.is_combo && <button className="btn btn-sm" onClick={() => setStockEdit(f.stock)}>⚖️ Cân bằng kho</button>}
+            <button className="btn btn-sm" onClick={() => setLabels(labelItemsFromProduct(f, 2))}>🏷️ In tem</button>
+          </div>
         </div>
       )}
       <div className="seg">
         <button className={tab === 'info' ? 'on' : ''} onClick={() => setTab('info')}>Thông tin</button>
         <button className={tab === 'units' ? 'on' : ''} onClick={() => setTab('units')}>Đơn vị tính ({1 + f.units.length})</button>
-        {id && <button className={tab === 'moves' ? 'on' : ''} onClick={() => setTab('moves')}>Thẻ kho</button>}
+        {id && !f.is_combo && <button className={tab === 'moves' ? 'on' : ''} onClick={() => setTab('moves')}>Thẻ kho</button>}
       </div>
 
       {tab === 'info' && (
@@ -158,13 +200,15 @@ function ProductForm({ id, categories, priceLists, onClose, onSaved, reloadCateg
                 {owner && <button className="btn" onClick={addCategory}>+</button>}
               </div>
             </Field>
-            {owner && <Field label="Giá vốn"><MoneyInput value={f.cost} onChange={(cost) => setF({ ...f, cost })} /></Field>}
+            {owner && !f.is_combo && <Field label="Giá vốn"><MoneyInput value={f.cost} onChange={(cost) => setF({ ...f, cost })} /></Field>}
             <Field label="Giá bán"><MoneyInput disabled={!owner} value={f.price} onChange={(price) => setF({ ...f, price })} /></Field>
-            {!id && <Field label="Tồn kho ban đầu"><QtyInput value={f.stock} onChange={(stock) => setF({ ...f, stock })} /></Field>}
-            <Field label="Tồn tối thiểu" hint="Báo khi hàng sắp hết"><QtyInput disabled={!owner} value={f.min_stock} onChange={(min_stock) => setF({ ...f, min_stock })} /></Field>
+            {!id && !f.is_combo && <Field label="Tồn kho ban đầu"><QtyInput value={f.stock} onChange={(stock) => setF({ ...f, stock })} /></Field>}
+            {!f.is_combo && <Field label="Tồn tối thiểu" hint="Báo khi hàng sắp hết"><QtyInput disabled={!owner} value={f.min_stock} onChange={(min_stock) => setF({ ...f, min_stock })} /></Field>}
           </div>
           {owner && f.cost > 0 && f.price > 0 && f.price < f.cost && <div className="warn">⚠️ Giá bán thấp hơn giá vốn</div>}
-          <label className="check"><input type="checkbox" disabled={!owner} checked={!f.track_stock} onChange={(e) => setF({ ...f, track_stock: e.target.checked ? 0 : 1 })} /> Không theo dõi tồn kho (dịch vụ, công lắp đặt…)</label>
+          <label className="check"><input type="checkbox" disabled={!owner} checked={!!f.is_combo} onChange={(e) => setF({ ...f, is_combo: e.target.checked ? 1 : 0, track_stock: e.target.checked ? 0 : 1, combo_items: f.combo_items ?? [] })} /> <span>🎁 Đây là <b>combo</b> (gồm nhiều món ghép lại)</span></label>
+          {!!f.is_combo && <ComboEditor f={f} setF={setF} owner={owner} />}
+          {!f.is_combo && <label className="check"><input type="checkbox" disabled={!owner} checked={!f.track_stock} onChange={(e) => setF({ ...f, track_stock: e.target.checked ? 0 : 1 })} /> Không theo dõi tồn kho (dịch vụ, công lắp đặt…)</label>}
           {id && <label className="check"><input type="checkbox" disabled={!owner} checked={!f.active} onChange={(e) => setF({ ...f, active: e.target.checked ? 0 : 1 })} /> Ngừng kinh doanh</label>}
           {priceLists.length > 0 && (
             <div className="sumbox">
@@ -218,6 +262,7 @@ function ProductForm({ id, categories, priceLists, onClose, onSaved, reloadCateg
       )}
 
       {scan && <Scanner onCode={(code) => setF((x) => ({ ...x, barcode: code }))} onClose={() => setScan(false)} />}
+      {labels && <LabelDialog items={labels} onClose={() => setLabels(null)} />}
       {stockEdit !== null && (
         <Modal title="Cân bằng kho" onClose={() => setStockEdit(null)}
           footer={<button className="btn btn-primary btn-lg btn-block" disabled={busy} onClick={adjustStock}>Cập nhật tồn kho</button>}>
@@ -320,15 +365,19 @@ export default function Products({ route }) {
         <div className="seg">
           <button className={tab === 'products' ? 'on' : ''} onClick={() => setTab('products')}>Hàng hoá</button>
           {owner && <button className={tab === 'prices' ? 'on' : ''} onClick={() => setTab('prices')}>Bảng giá</button>}
+          {owner && <button className={tab === 'count' ? 'on' : ''} onClick={() => setTab('count')}>Kiểm kho</button>}
         </div>
       </div>
-      {tab === 'prices' ? <PriceLists /> : (
+      {tab === 'count' && <StockCount />}
+      {tab === 'prices' && <PriceLists />}
+      {tab === 'products' && (
         <>
           <div className="sticky-tools">
             <div className="row gap wrap">
               {stats.data && <span className="badge badge-blue">{num(stats.data.total)} hàng hoá · tồn {num(stats.data.total_stock)}</span>}
               <span className="grow" />
               {owner && <button className="btn" onClick={() => setImporting(true)}>📥 Nhập file</button>}
+              {owner && <a className="btn" href={downloadUrl('/export/products.xlsx')} download>📤 Xuất Excel</a>}
               {owner && <button className="btn btn-primary" onClick={() => go('hang-hoa/moi')}>+ Thêm</button>}
             </div>
             <input className="input" placeholder="🔍 Tên, mã hàng, mã vạch" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -364,7 +413,7 @@ export default function Products({ route }) {
                     </span>
                     <span className="r">
                       <span className={p.track_stock && p.stock < 0 ? 'neg' : p.track_stock && p.stock <= p.min_stock ? 'warn-text' : ''}>
-                        {p.track_stock ? `SL: ${num(p.stock)}` : 'Dịch vụ'}
+                        {p.is_combo ? `Combo · ráp ${num(p.stock)}` : p.track_stock ? `SL: ${num(p.stock)}` : 'Dịch vụ'}
                       </span>
                       <b className="block">{money(showCost ? p.cost : p.price)}</b>
                     </span>

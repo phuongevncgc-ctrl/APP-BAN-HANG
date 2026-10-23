@@ -1,6 +1,6 @@
 # Cấu hình add-on Home Assistant
 name: Bán hàng
-version: "0.1.0"
+version: "0.2.0"
 slug: ban_hang
 description: Phần mềm bán hàng chạy ngay trên máy Home Assistant, dùng được trên điện thoại và máy tính
 url: https://github.com/phuongevncgc-ctrl/APP-BAN-HANG

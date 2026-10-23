@@ -2,7 +2,8 @@
 import { Router } from 'express';
 import { tx, nextCode, fold } from '../db.js';
 import { requireOwner, hashPassword } from '../auth.js';
-import { bad, notFound, money, str, idOrNull, METHODS } from '../util.js';
+import { bad, notFound, money, str, idOrNull, METHODS, day } from '../util.js';
+import { customerLedger, supplierLedger } from '../ledger.js';
 
 export default function peopleRoutes(db) {
   const r = Router();
@@ -83,6 +84,10 @@ export default function peopleRoutes(db) {
   });
 
   // Thu nợ khách
+  r.get('/customers/:id/ledger', (req, res) => {
+    res.json(customerLedger(db, Number(req.params.id), day(req.query.from, ''), day(req.query.to, '')));
+  });
+
   r.post('/customers/:id/pay', (req, res) => {
     const id = Number(req.params.id);
     const c = db.prepare('SELECT debt FROM customers WHERE id = ?').get(id);
@@ -122,6 +127,10 @@ export default function peopleRoutes(db) {
     res.json({ ok: true });
   });
   // Trả nợ nhà cung cấp
+  r.get('/suppliers/:id/ledger', requireOwner, (req, res) => {
+    res.json(supplierLedger(db, Number(req.params.id), day(req.query.from, ''), day(req.query.to, '')));
+  });
+
   r.post('/suppliers/:id/pay', requireOwner, (req, res) => {
     const id = Number(req.params.id);
     if (!db.prepare('SELECT 1 FROM suppliers WHERE id = ?').get(id)) throw notFound();

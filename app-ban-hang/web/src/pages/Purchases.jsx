@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { get, post, put } from '../api.js';
+import { get, post, put, downloadUrl } from '../api.js';
+import Ledger from '../components/Ledger.jsx';
+import LabelDialog from '../components/Labels.jsx';
 import { money, num, vnd, dateTime, isoDay, METHOD_NAMES } from '../format.js';
 import { DateRange, Field, Loading, Modal, MoneyInput, QtyInput, useAction, useLoad, useToast } from '../components/ui.jsx';
 import { ProductSearch, unitOptions } from '../components/Pickers.jsx';
@@ -134,6 +136,7 @@ function StockForm({ mode, suppliers, onClose, onSaved, reloadSuppliers }) {
 
 function PurchaseDetail({ id, onClose }) {
   const state = useLoad(() => get(`/purchases/${id}`), [id]);
+  const [labels, setLabels] = useState(null);
   return (
     <Modal title="Phiếu nhập" onClose={onClose} wide>
       <Loading state={state}>
@@ -155,6 +158,10 @@ function PurchaseDetail({ id, onClose }) {
               {p.total > p.paid && <div className="row-between neg"><span>Còn nợ</span><b>{money(p.total - p.paid)}</b></div>}
               {p.note && <div className="muted">Ghi chú: {p.note}</div>}
             </div>
+            <button className="btn btn-block" onClick={() => setLabels(p.items.map((it) => ({
+              key: it.id, name: it.product_name ?? it.name, unit: it.unit, code: it.code, barcode: it.barcode, price: it.sell_price, qty: Math.ceil(it.qty),
+            })))}>🏷️ In tem cho hàng vừa nhập</button>
+            {labels && <LabelDialog items={labels} onClose={() => setLabels(null)} />}
           </>
         )}
       </Loading>
@@ -188,6 +195,7 @@ export default function Purchases() {
   const [detail, setDetail] = useState(null);
   const [editSup, setEditSup] = useState(null);
   const [paySup, setPaySup] = useState(null);
+  const [ledgerSup, setLedgerSup] = useState(null);
   const suppliers = useLoad(() => get('/suppliers'), []);
   const purchases = useLoad(() => get(`/purchases?from=${range[0]}&to=${range[1]}`), [range[0], range[1]]);
   const sreturns = useLoad(() => get(`/supplier-returns?from=${range[0]}&to=${range[1]}`), [range[0], range[1]]);
@@ -239,7 +247,10 @@ export default function Purchases() {
       )}
       {tab === 'suppliers' && (
         <>
-          <button className="btn" onClick={() => setEditSup({})}>+ Thêm nhà cung cấp</button>
+          <div className="row gap">
+            <button className="btn grow" onClick={() => setEditSup({})}>+ Thêm nhà cung cấp</button>
+            {owner && <a className="btn" href={downloadUrl('/export/suppliers.xlsx')} download>📥 Excel công nợ</a>}
+          </div>
           <Loading state={suppliers}>
             {(rows) => (
               <div className="list">
@@ -249,6 +260,7 @@ export default function Purchases() {
                       <b>{s.name}</b><small className="muted block">{s.phone} {s.address}</small>
                     </button>
                     {s.debt !== 0 && <b className="neg">{money(s.debt)}</b>}
+                    {owner && <button className="btn btn-sm" onClick={() => setLedgerSup(s)}>📒 Sổ nợ</button>}
                     {owner && s.debt > 0 && <button className="btn btn-sm" onClick={() => setPaySup(s)}>Trả nợ</button>}
                   </div>
                 ))}
@@ -263,6 +275,7 @@ export default function Purchases() {
       )}
       {detail && <PurchaseDetail id={detail} onClose={() => setDetail(null)} />}
       {editSup && <SupplierForm supplier={editSup.id ? editSup : null} onClose={() => setEditSup(null)} onSaved={() => { setEditSup(null); suppliers.reload(); }} />}
+      {ledgerSup && <Modal title={`Sổ công nợ: ${ledgerSup.name}`} wide onClose={() => setLedgerSup(null)}><Ledger kind="supplier" id={ledgerSup.id} /></Modal>}
       {paySup && <PaySupplier supplier={paySup} onClose={() => setPaySup(null)} onDone={() => { setPaySup(null); suppliers.reload(); }} />}
     </div>
   );

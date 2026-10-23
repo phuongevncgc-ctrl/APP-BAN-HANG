@@ -4,6 +4,118 @@ import { money, vnd } from '../format.js';
 import { Field, Loading, Modal, useAction, useLoad } from '../components/ui.jsx';
 import { useSettings, useUser, isOwner } from '../App.jsx';
 import { ReceiptBody, usePrint } from '../components/Receipt.jsx';
+import { renderReceipt, renderLabels, toImage, sendToPrinter, setPrintersCache } from '../printing.js';
+
+const PRINTER_TYPES = [['k80', 'Hoá đơn K80'], ['k58', 'Hoá đơn K58'], ['label', 'Tem mã vạch']];
+const SAMPLE_INV = {
+  code: 'HD000123', created_at: new Date().toLocaleString('sv'), customer_name: 'Anh Ba', user_name: 'Thu ngân', subtotal: 230000, discount: 10000, total: 220000, paid: 220000, change_amount: 30000,
+  items: [{ id: 1, name: 'Ống Hoa Sen 60', unit: 'Cây', qty: 2, price: 90000, discount: 5000, total: 170000 }, { id: 2, name: 'Keo dán ống', unit: 'Tuýp', qty: 2, price: 30000, discount: 0, total: 60000 }],
+  payments: [{ method: 'cash', amount: 220000 }],
+};
+const SAMPLE_LABEL = { name: 'Ống nhựa Bình Minh 21mm', unit: 'Cây', code: 'BMO2719C', barcode: '8934567890123', price: 56000 };
+
+function PrinterForm({ printer, onClose, onSave }) {
+  const settings = useSettings();
+  const [f, setF] = useState(printer);
+  const [run, busy] = useAction();
+  const set = (patch) => setF({ ...f, ...patch });
+  const check = () => run(() => post('/printers/check', { ip: f.ip, port: f.port }), `Kết nối được máy in ${f.ip}`);
+  const testPrint = async () => {
+    // Lưu trước để máy chủ biết máy in này, rồi in thử
+    const saved = await onSave(f, false);
+    if (!saved) return;
+    const p = saved.find((x) => x.id === f.id) ?? saved[saved.length - 1];
+    const images = p.type === 'label'
+      ? renderLabels([{ ...SAMPLE_LABEL, qty: p.columns }], p, settings).map((c) => toImage(c))
+      : [renderReceipt(SAMPLE_INV, settings, p.type)];
+    await run(() => sendToPrinter(p, images), 'Đã gửi trang in thử');
+  };
+  return (
+    <Modal title={printer.ip ? 'Sửa máy in' : 'Thêm máy in'} onClose={onClose}
+      footer={<button className="btn btn-primary btn-lg btn-block" disabled={busy} onClick={() => onSave(f, true)}>Lưu máy in</button>}>
+      <Field label="Tên gọi"><input className="input" value={f.name} placeholder="vd: Máy in quầy, Máy in tem" onChange={(e) => set({ name: e.target.value })} /></Field>
+      <Field label="Loại máy in">
+        <div className="seg">{PRINTER_TYPES.map(([k, l]) => <button key={k} className={f.type === k ? 'on' : ''} onClick={() => set({ type: k })}>{l}</button>)}</div>
+      </Field>
+      <div className="grid2">
+        <Field label="Địa chỉ IP" hint="In trang cấu hình của máy in để xem IP"><input className="input" inputMode="decimal" placeholder="192.168.1.100" value={f.ip} onChange={(e) => set({ ip: e.target.value.trim() })} /></Field>
+        <Field label="Cổng"><input className="input" inputMode="numeric" value={f.port} onChange={(e) => set({ port: Number(e.target.value) || '' })} /></Field>
+      </div>
+      {f.type === 'label' && (
+        <div className="sumbox">
+          <b>Khổ tem</b>
+          <div className="grid2">
+            <Field label="Rộng 1 tem (mm)"><input className="input" inputMode="decimal" value={f.label_w} onChange={(e) => set({ label_w: Number(e.target.value) || '' })} /></Field>
+            <Field label="Cao 1 tem (mm)"><input className="input" inputMode="decimal" value={f.label_h} onChange={(e) => set({ label_h: Number(e.target.value) || '' })} /></Field>
+            <Field label="Số tem 1 hàng">
+              <div className="seg">{[1, 2, 3].map((n) => <button key={n} className={f.columns === n ? 'on' : ''} onClick={() => set({ columns: n })}>{n} tem</button>)}</div>
+            </Field>
+            <Field label="Khe giữa 2 tem (mm)"><input className="input" inputMode="decimal" value={f.col_gap} onChange={(e) => set({ col_gap: Number(e.target.value) })} /></Field>
+            <Field label="Khe giữa 2 hàng (mm)"><input className="input" inputMode="decimal" value={f.gap} onChange={(e) => set({ gap: Number(e.target.value) })} /></Field>
+            <Field label="Độ đậm (1-15)"><input className="input" inputMode="numeric" value={f.density} onChange={(e) => set({ density: Number(e.target.value) })} /></Field>
+          </div>
+          <label className="check"><input type="checkbox" checked={f.show_shop} onChange={(e) => set({ show_shop: e.target.checked })} /> In tên cửa hàng trên tem</label>
+          <label className="check"><input type="checkbox" checked={f.show_price} onChange={(e) => set({ show_price: e.target.checked })} /> In giá bán trên tem</label>
+          <label className="check"><input type="checkbox" checked={!f.invert} onChange={(e) => set({ invert: !e.target.checked })} /> Đảo màu (bật nếu tem in ra bị đen nền, chữ trắng)</label>
+          <small className="muted">Cuộn tem 2 con thường là 35×22 mm hoặc 50×30 mm, khe 2 mm. Đo tem thật rồi điền.</small>
+        </div>
+      )}
+      <div className="row gap">
+        <button className="btn grow" disabled={busy || !f.ip} onClick={check}>🔌 Kiểm tra kết nối</button>
+        <button className="btn grow" disabled={busy || !f.ip} onClick={testPrint}>🖨️ In thử</button>
+      </div>
+    </Modal>
+  );
+}
+
+function Printers() {
+  const list = useLoad(() => get('/printers'), []);
+  const [edit, setEdit] = useState(null);
+  const [run] = useAction();
+  const save = async (p, close) => {
+    const rows = list.data ?? [];
+    const next = rows.some((x) => x.id === p.id) ? rows.map((x) => (x.id === p.id ? p : x)) : [...rows, p];
+    const saved = await run(() => put('/printers', next), close ? 'Đã lưu máy in' : null);
+    if (saved) {
+      setPrintersCache(saved);
+      list.reload();
+      if (close) setEdit(null);
+    }
+    return saved;
+  };
+  const remove = async (p) => {
+    if (!window.confirm(`Xoá máy in "${p.name}"?`)) return;
+    const saved = await run(() => put('/printers', list.data.filter((x) => x.id !== p.id)), 'Đã xoá');
+    if (saved) {
+      setPrintersCache(saved);
+      list.reload();
+    }
+  };
+  const blank = { id: `p${Date.now().toString(36)}`, name: '', ip: '', port: 9100, type: 'k80', label_w: 35, label_h: 22, columns: 2, col_gap: 2, gap: 2, density: 8, invert: true, show_shop: true, show_price: true };
+  return (
+    <div className="card">
+      <div className="row-between"><h3>🖨️ Máy in qua mạng (IP)</h3><button className="btn btn-sm" onClick={() => setEdit(blank)}>+ Thêm</button></div>
+      <Loading state={list}>
+        {(rows) => (
+          <div className="list">
+            {rows.length === 0 && <div className="empty">Chưa có máy in. Không cài thì app in bằng hộp thoại in của trình duyệt.</div>}
+            {rows.map((p) => (
+              <div key={p.id} className="list-item">
+                <button className="grow text-left" onClick={() => setEdit({ ...blank, ...p })}>
+                  <b>{p.name}</b>
+                  <small className="muted block">{PRINTER_TYPES.find(([k]) => k === p.type)?.[1]} · {p.ip}:{p.port}{p.type === 'label' ? ` · ${p.columns} tem ${p.label_w}×${p.label_h}mm` : ''}</small>
+                </button>
+                <button className="btn btn-sm btn-danger" onClick={() => remove(p)}>Xoá</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Loading>
+      <p className="muted small">Máy in phải cắm dây mạng hoặc wifi <b>cùng mạng với máy Home Assistant</b>. Hoá đơn A4 thì bấm "In A4" ở hoá đơn và chọn máy in A4 trong hộp thoại in.</p>
+      {edit && <PrinterForm printer={edit} onClose={() => setEdit(null)} onSave={save} />}
+    </div>
+  );
+}
 
 // Mã BIN ngân hàng cho VietQR
 const BANKS = [
@@ -20,11 +132,6 @@ function ShopSettings({ reloadSettings }) {
   const [print, portal] = usePrint();
   const save = async () => {
     if (await run(() => put('/settings', f), 'Đã lưu cài đặt')) reloadSettings();
-  };
-  const sample = {
-    code: 'HD000123', created_at: new Date().toLocaleString('sv'), customer_name: 'Anh Ba', user_name: 'Thu ngân', subtotal: 230000, discount: 10000, total: 220000, paid: 220000, change_amount: 30000,
-    items: [{ id: 1, name: 'Ống Hoa Sen 60', unit: 'Cây', qty: 2, price: 90000, discount: 5000, total: 170000 }, { id: 2, name: 'Keo dán ống', unit: 'Tuýp', qty: 2, price: 30000, discount: 0, total: 60000 }],
-    payments: [{ method: 'cash', amount: 220000 }],
   };
   return (
     <div className="card">
@@ -49,7 +156,7 @@ function ShopSettings({ reloadSettings }) {
       <Field label="Số tài khoản"><input className="input" inputMode="numeric" value={f.bank_account} onChange={(e) => setF({ ...f, bank_account: e.target.value.trim() })} /></Field>
       <Field label="Tên chủ tài khoản"><input className="input" value={f.bank_holder} onChange={(e) => setF({ ...f, bank_holder: e.target.value.toUpperCase() })} /></Field>
       <div className="row gap">
-        <button className="btn" onClick={() => print(<ReceiptBody inv={sample} settings={f} />)}>🖨️ In thử</button>
+        <button className="btn" onClick={() => print(<ReceiptBody inv={SAMPLE_INV} settings={f} />)}>🖨️ In thử</button>
         <button className="btn btn-primary grow" disabled={busy} onClick={save}>Lưu cài đặt</button>
       </div>
       {portal}
@@ -179,6 +286,7 @@ export default function Settings({ reloadSettings }) {
       <div className="page-head"><h1>Cài đặt</h1></div>
       <HttpsHelp />
       {owner && <ShopSettings reloadSettings={reloadSettings} />}
+      {owner && <Printers />}
       {owner && <Users />}
       {owner && <Backups />}
       <Account reloadSettings={reloadSettings} />

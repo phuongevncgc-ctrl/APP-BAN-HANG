@@ -59,6 +59,10 @@ export function groupKiotVietRows(rows) {
       errors.push({ row: r._row, code, reason: !code ? 'Thiếu mã hàng' : 'Thiếu tên hàng' });
       continue;
     }
+    if (/combo/i.test(text(pick(r, ['Loại hàng'])))) {
+      errors.push({ row: r._row, code, reason: 'Combo: tạo combo trong app, không nhập từ file' });
+      continue;
+    }
     const factor = number(pick(r, ['Quy đổi', 'quy_doi'])) || 1;
     let baseRef = text(pick(r, ['Mã ĐVT Cơ bản', 'ma_dvt_co_ban'])).toUpperCase();
     if (!baseRef && factor !== 1) baseRef = text(pick(r, ['Mã HH Liên quan', 'ma_hh_lien_quan'])).toUpperCase();
@@ -137,6 +141,11 @@ function saveGroups(db, groups, { updateStock }) {
 
   for (const g of groups) {
     let p = findProduct.get(g.code);
+    if (p?.is_combo) {
+      result.errors.push({ row: g.base?.row ?? g.units[0]?.row, code: g.code, reason: 'Mã này đang là combo trong app, bỏ qua' });
+      result.skipped++;
+      continue;
+    }
     if (g.base) {
       const b = g.base;
       if (!b.name) {

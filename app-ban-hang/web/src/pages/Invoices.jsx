@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { get, post } from '../api.js';
+import { get, post, downloadUrl } from '../api.js';
 import { money, num, vnd, dateTime, isoDay, METHOD_NAMES } from '../format.js';
 import { DateRange, Loading, Modal, QtyInput, useAction, useLoad, useDebounced, confirmAsk } from '../components/ui.jsx';
 import { ReceiptActions } from '../components/Receipt.jsx';
@@ -121,6 +121,7 @@ export function InvoiceDetail({ id, onClose, onChanged }) {
 }
 
 export default function Invoices({ route }) {
+  const user = useUser();
   const today = isoDay(new Date());
   const [tab, setTab] = useState('invoices');
   const [range, setRange] = useState([today, today]);
@@ -142,7 +143,10 @@ export default function Invoices({ route }) {
       <DateRange from={range[0]} to={range[1]} onChange={(f, t) => setRange([f, t])} />
       {tab === 'invoices' ? (
         <>
-          <input className="input" placeholder="🔍 Mã hoá đơn, tên hoặc SĐT khách" value={q} onChange={(e) => setQ(e.target.value)} />
+          <div className="row gap">
+            <input className="input grow" placeholder="🔍 Mã hoá đơn, tên hoặc SĐT khách" value={q} onChange={(e) => setQ(e.target.value)} />
+            {isOwner(user) && <a className="btn" href={downloadUrl(`/export/invoices.xlsx?from=${range[0]}&to=${range[1]}`)} download>📤 Excel</a>}
+          </div>
           <Loading state={invoices}>
             {(rows) => (
               <>

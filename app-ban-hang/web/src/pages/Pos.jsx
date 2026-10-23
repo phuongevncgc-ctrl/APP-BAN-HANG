@@ -3,7 +3,7 @@ import { get, post, del } from '../api.js';
 import { money, num, vnd, moneyToWords, dateTime } from '../format.js';
 import { Modal, MoneyInput, QtyInput, Field, useAction, useToast, confirmAsk } from '../components/ui.jsx';
 import { ProductSearch, CustomerPicker, unitOptions } from '../components/Pickers.jsx';
-import { ReceiptBody, ReceiptActions, usePrint, vietQrUrl } from '../components/Receipt.jsx';
+import { ReceiptActions, useReceiptPrint, vietQrUrl } from '../components/Receipt.jsx';
 import { useSettings, useUser, isOwner } from '../App.jsx';
 
 const STORE_KEY = 'banhang_carts';
@@ -363,7 +363,7 @@ export default function Pos() {
   const [draftCount, setDraftCount] = useState(0);
   const [priceLists, setPriceLists] = useState([]);
   const [run, busy] = useAction();
-  const [print, printPortal] = usePrint();
+  const [printReceipt, printPortal] = useReceiptPrint();
 
   const cart = carts[Math.min(active, carts.length - 1)];
   const t = totals(cart);
@@ -447,7 +447,7 @@ export default function Pos() {
     });
     setMobilePay(false);
     setDone(inv);
-    if (autoPrint) print(<ReceiptBody inv={inv} settings={settings} />);
+    if (autoPrint) printReceipt(inv);
   };
 
   const saveDraft = async () => {

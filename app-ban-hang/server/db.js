@@ -260,6 +260,54 @@ const SCHEMA = [
     ('bank_account', ''),
     ('bank_holder', '');
   `,
+  // v2: combo, sổ quỹ, phiếu kiểm kho
+  `
+  ALTER TABLE products ADD COLUMN is_combo INTEGER NOT NULL DEFAULT 0;
+
+  -- Thành phần của combo: qty tính theo đơn vị gốc của món bên trong
+  CREATE TABLE combo_items (
+    combo_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    item_id INTEGER NOT NULL REFERENCES products(id),
+    qty REAL NOT NULL CHECK (qty > 0),
+    PRIMARY KEY (combo_id, item_id)
+  );
+
+  -- Combo đã bán: lưu thành phần lúc bán để trả hàng / huỷ hoàn kho đúng
+  ALTER TABLE invoice_items ADD COLUMN components TEXT;
+
+  -- Sổ quỹ: thu chi ngoài bán hàng (tiền điện, lương, tiền đầu ca...)
+  CREATE TABLE cash_entries (
+    id INTEGER PRIMARY KEY,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    kind TEXT NOT NULL CHECK (kind IN ('in','out')),
+    category TEXT NOT NULL DEFAULT '',
+    method TEXT NOT NULL CHECK (method IN ('cash','transfer','card')),
+    amount INTEGER NOT NULL CHECK (amount > 0),
+    note TEXT NOT NULL DEFAULT '',
+    user_id INTEGER REFERENCES users(id)
+  );
+  CREATE INDEX cash_entries_created ON cash_entries(created_at);
+
+  CREATE TABLE stock_counts (
+    id INTEGER PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    user_id INTEGER REFERENCES users(id),
+    note TEXT NOT NULL DEFAULT ''
+  );
+
+  CREATE TABLE stock_count_items (
+    id INTEGER PRIMARY KEY,
+    count_id INTEGER NOT NULL REFERENCES stock_counts(id) ON DELETE CASCADE,
+    product_id INTEGER NOT NULL REFERENCES products(id),
+    name TEXT NOT NULL,
+    system_qty REAL NOT NULL,
+    actual_qty REAL NOT NULL,
+    cost INTEGER NOT NULL DEFAULT 0
+  );
+
+  INSERT INTO settings (key, value) VALUES ('printers', '[]');
+  `,
 ];
 
 export function openDb(file) {

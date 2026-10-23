@@ -45,7 +45,7 @@ export default function catalogRoutes(db, { imagesDir }) {
   const r = Router();
 
   const productFields = (req) => `p.id, p.code, p.barcode, p.name, p.category_id, p.unit, p.price, p.stock, p.min_stock,
-    p.track_stock, p.image, p.active, c.name AS category_name${isOwner(req) ? ', p.cost, p.last_cost' : ''}`;
+    p.track_stock, p.image, p.active, p.is_combo, c.name AS category_name${isOwner(req) ? ', p.cost, p.last_cost' : ''}`;
 
   // Gắn danh sách đơn vị quy đổi và giá theo bảng giá vào từng hàng.
   function attachUnits(rows, listId) {
@@ -64,7 +64,25 @@ export default function catalogRoutes(db, { imagesDir }) {
       row.sell_price = row.list_price ?? row.price;
       row.units = byProduct.get(row.id) ?? [];
     }
+    attachCombos(rows);
     return rows;
+  }
+
+  // Combo: danh sách món bên trong, số combo ráp được từ tồn kho, giá vốn = tổng giá vốn các món.
+  function attachCombos(rows) {
+    const combos = rows.filter((r) => r.is_combo);
+    if (!combos.length) return;
+    const parts = db.prepare(`SELECT ci.combo_id, ci.item_id, ci.qty, p.name, p.code, p.unit, p.stock, p.cost, p.track_stock
+      FROM combo_items ci JOIN products p ON p.id = ci.item_id
+      WHERE ci.combo_id IN (${combos.map(() => '?').join(',')})`).all(...combos.map((c) => c.id));
+    for (const c of combos) {
+      const mine = parts.filter((x) => x.combo_id === c.id);
+      const tracked = mine.filter((x) => x.track_stock);
+      c.stock = tracked.length ? Math.max(0, Math.min(...tracked.map((x) => Math.floor((x.stock + 1e-9) / x.qty)))) : 0;
+      if ('cost' in c) c.cost = Math.round(mine.reduce((s, x) => s + x.cost * x.qty, 0));
+      const owner = 'cost' in c;
+      c.combo_items = mine.map(({ item_id, qty, name, code, unit, stock, cost }) => ({ item_id, qty, name, code, unit, stock, ...(owner ? { cost } : {}) }));
+    }
   }
 
   // ---------- Hàng hoá ----------
@@ -102,7 +120,7 @@ export default function catalogRoutes(db, { imagesDir }) {
         SUM(track_stock = 1 AND stock = 0) AS out_stock,
         SUM(track_stock = 1 AND stock < 0) AS neg_stock,
         SUM(track_stock = 1 AND min_stock > 0 AND stock <= min_stock) AS low_stock
-      FROM products WHERE active = 1`).get());
+      FROM products WHERE active = 1 AND is_combo = 0`).get());
   });
 
   // Tìm đúng mã vạch / mã hàng (dùng khi quét). Trả về cả đơn vị nếu mã thuộc đơn vị quy đổi.
@@ -143,6 +161,7 @@ export default function catalogRoutes(db, { imagesDir }) {
           WHEN 'return' THEN (SELECT code FROM returns WHERE id = m.ref_id)
           WHEN 'purchase' THEN (SELECT code FROM purchases WHERE id = m.ref_id)
           WHEN 'supplier_return' THEN (SELECT code FROM supplier_returns WHERE id = m.ref_id)
+          WHEN 'count' THEN (SELECT code FROM stock_counts WHERE id = m.ref_id)
         END AS ref_code,
         CASE m.kind
           WHEN 'sale' THEN (SELECT c.name FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = m.ref_id)
@@ -167,9 +186,28 @@ export default function catalogRoutes(db, { imagesDir }) {
       cost: money(body.cost ?? existing?.cost, 'Giá vốn'),
       price: money(body.price, 'Giá bán'),
       min_stock: Number(body.min_stock) || 0,
-      track_stock: body.track_stock === false || body.track_stock === 0 ? 0 : 1,
+      track_stock: body.is_combo || body.track_stock === false || body.track_stock === 0 ? 0 : 1,
       active: body.active === false || body.active === 0 ? 0 : 1,
+      is_combo: body.is_combo ? 1 : 0,
     };
+  }
+
+  // Lưu thành phần combo: [{item_id, qty}] (qty theo đơn vị gốc của món bên trong)
+  function saveComboItems(comboId, f, items) {
+    db.prepare('DELETE FROM combo_items WHERE combo_id = ?').run(comboId);
+    if (!f.is_combo) return;
+    const list = Array.isArray(items) ? items : [];
+    if (!list.length) throw bad('Combo phải có ít nhất 1 món bên trong');
+    for (const it of list) {
+      const itemId = idOrNull(it.item_id);
+      const q = Number(it.qty);
+      const item = db.prepare('SELECT name, is_combo FROM products WHERE id = ?').get(itemId);
+      if (!item) throw bad('Có món trong combo không tồn tại');
+      if (item.is_combo || itemId === comboId) throw bad(`Không cho combo nằm trong combo ("${item.name}")`);
+      if (!(q > 0)) throw bad(`Số lượng "${item.name}" trong combo phải lớn hơn 0`);
+      db.prepare(`INSERT INTO combo_items (combo_id, item_id, qty) VALUES (?, ?, ?)
+        ON CONFLICT (combo_id, item_id) DO UPDATE SET qty = qty + excluded.qty`).run(comboId, itemId, q);
+    }
   }
 
   // Lưu đơn vị quy đổi: thay toàn bộ danh sách bằng danh sách gửi lên.
@@ -228,11 +266,12 @@ export default function catalogRoutes(db, { imagesDir }) {
     const image = req.body.image_data ? saveImage(imagesDir, req.body.image_data) : null;
     const id = tx(db, () => {
       const { lastInsertRowid } = db.prepare(`INSERT INTO products
-        (code, barcode, name, search, category_id, unit, cost, price, min_stock, track_stock, active, image)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-        f.code, f.barcode, f.name, f.search, f.category_id, f.unit, f.cost, f.price, f.min_stock, f.track_stock, f.active, image,
+        (code, barcode, name, search, category_id, unit, cost, price, min_stock, track_stock, active, image, is_combo)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        f.code, f.barcode, f.name, f.search, f.category_id, f.unit, f.cost, f.price, f.min_stock, f.track_stock, f.active, image, f.is_combo,
       );
       const id = Number(lastInsertRowid);
+      saveComboItems(id, f, req.body.combo_items);
       const stock = Number(req.body.stock) || 0;
       if (stock && f.track_stock) moveStock(db, id, stock, 'init', null);
       const unitIds = saveUnits(id, req.body.units, f.unit) ?? [];
@@ -251,10 +290,15 @@ export default function catalogRoutes(db, { imagesDir }) {
     if (req.body.image_data) image = saveImage(imagesDir, req.body.image_data);
     else if (req.body.remove_image) image = null;
     tx(db, () => {
+      if (existing.is_combo !== f.is_combo && db.prepare('SELECT 1 FROM invoice_items WHERE product_id = ?').get(id)) {
+        throw bad('Hàng đã bán rồi nên không đổi được giữa hàng thường và combo. Hãy tạo hàng mới.');
+      }
+      if (f.is_combo && existing.stock) throw bad('Hàng này đang có tồn kho, không chuyển thành combo được. Hãy tạo combo mới.');
       db.prepare(`UPDATE products SET code=?, barcode=?, name=?, search=?, category_id=?, unit=?, cost=?, price=?,
-        min_stock=?, track_stock=?, active=?, image=? WHERE id=?`).run(
-        f.code, f.barcode, f.name, f.search, f.category_id, f.unit, f.cost, f.price, f.min_stock, f.track_stock, f.active, image, id,
+        min_stock=?, track_stock=?, active=?, image=?, is_combo=? WHERE id=?`).run(
+        f.code, f.barcode, f.name, f.search, f.category_id, f.unit, f.cost, f.price, f.min_stock, f.track_stock, f.active, image, f.is_combo, id,
       );
+      saveComboItems(id, f, req.body.combo_items);
       const unitIds = saveUnits(id, req.body.units, f.unit) ?? [];
       // Đơn vị mới được thêm sau các đơn vị cũ, theo thứ tự gửi lên
       const newIds = (req.body.units ?? []).map((u, i) => (idOrNull(u.id) ? null : unitIds[i])).filter((x) => x);

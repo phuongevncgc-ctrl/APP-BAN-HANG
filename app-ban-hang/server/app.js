@@ -6,6 +6,9 @@ import { HttpError, bad, str } from './util.js';
 import catalogRoutes from './routes/catalog.js';
 import peopleRoutes from './routes/people.js';
 import salesRoutes from './routes/sales.js';
+import exportRoutes from './routes/export.js';
+import printRoutes from './routes/print.js';
+import cashRoutes from './routes/cash.js';
 import adminRoutes, { getSettings } from './routes/admin.js';
 
 export function createApp(db, { dataDir, webDir }) {
@@ -63,6 +66,9 @@ export function createApp(db, { dataDir, webDir }) {
   api.use(peopleRoutes(db));
   api.use(salesRoutes(db));
   api.use(adminRoutes(db, { backupDir }));
+  api.use(exportRoutes(db));
+  api.use(printRoutes(db));
+  api.use(cashRoutes(db));
 
   api.use((_req, _res, next) => next(new HttpError(404, 'Không có chức năng này')));
 

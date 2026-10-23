@@ -10,7 +10,11 @@ Phần mềm bán hàng cho cửa hàng nhỏ, chạy ngay trên máy Home Assis
 - **Tách thanh toán**: tiền mặt, chuyển khoản, thẻ, kết hợp nhiều cách, ghi nợ. Tự tính tiền thối. Hiện mã QR chuyển khoản (VietQR) và nút đọc to "Đã nhận tiền".
 - **Bảng giá**: giá sỉ, giá thợ… gán cho từng khách, bán tự lấy đúng giá.
 - **Trả hàng**: khách trả một phần hay cả hoá đơn, hoàn tiền mặt, chuyển khoản hoặc trừ vào nợ. Trả hàng cho nhà cung cấp.
-- **Hoá đơn in** khổ 80mm hoặc 58mm (4 cột: Hàng hoá, SL, Giảm, Tiền, có số tiền bằng chữ). Gửi hoá đơn qua Zalo.
+- **Combo hàng hoá**: ghép nhiều món thành một bộ, bán combo thì kho trừ từng món bên trong.
+- **Hoá đơn in** khổ 80mm, 58mm hoặc A4 (có số tiền bằng chữ). Gửi hoá đơn qua Zalo.
+- **Máy in qua IP**: máy in hoá đơn K80 và máy in tem mã vạch (cuộn 2 tem) cắm mạng cùng nhà với Home Assistant, in thẳng không cần cài driver.
+- **Thu chi, chốt ca, kiểm kho**: phiếu thu / chi, sổ quỹ, in phiếu chốt ca cuối ngày, phiếu kiểm kho nhiều món.
+- **Xuất Excel**: hàng hoá, hoá đơn, công nợ khách hàng và nhà cung cấp (tổng hợp + sổ chi tiết), in biên bản đối chiếu công nợ.
 - **Khách hàng & công nợ**: lịch sử mua, hoá đơn còn nợ, nợ lâu nhất bao nhiêu ngày, thu nợ có chiết khấu.
 - **Nhập hàng**: phiếu nhập theo đơn vị bất kỳ, chiết khấu %, giá vốn bình quân, nợ nhà cung cấp.
 - **Kho**: thẻ kho (lịch sử nhập xuất), cân bằng kho, lọc hàng còn / hết / âm kho / sắp hết.
@@ -36,6 +40,16 @@ Phần mềm bán hàng cho cửa hàng nhỏ, chạy ngay trên máy Home Assis
 - Bấm **Thêm vào màn hình chính** để dùng như app.
 - **Quét mã vạch bằng camera** chỉ chạy khi mở bằng địa chỉ `https://` (luật của điện thoại). Cách dễ nhất là mở qua app Home Assistant (thanh bên → Bán hàng) khi Home Assistant đã có https. Máy quét mã vạch USB / Bluetooth thì dùng được ngay.
 - Muốn mở thẳng cổng 8099 bằng https: trong tab **Cấu hình** của add-on, bật `ssl` và điền tên file chứng chỉ trong thư mục `/ssl` của Home Assistant.
+
+### Cài máy in qua IP
+
+1. In trang cấu hình của máy in (thường giữ nút FEED khi bật máy) để xem địa chỉ IP, vd `192.168.1.100`. Máy in phải cùng mạng với máy Home Assistant.
+2. Vào **Cài đặt → Máy in qua mạng (IP) → + Thêm**, chọn loại (Hoá đơn K80 / K58 / Tem mã vạch), nhập IP, bấm **Kiểm tra kết nối** rồi **In thử**.
+3. Máy in tem: điền khổ 1 tem (vd 35×22 mm), số tem một hàng (cuộn 2 tem chọn 2). Nếu tem in ra bị đen nền thì bật **Đảo màu**.
+4. In tem: mở hàng hoá → **🏷️ In tem**, hoặc mở phiếu nhập → **In tem cho hàng vừa nhập**.
+5. Hoá đơn A4: mở hoá đơn → **📄 In A4**, chọn máy in A4 trong hộp thoại in.
+
+> Máy in hoá đơn phải hiểu lệnh ESC/POS, máy in tem phải hiểu lệnh TSPL (Xprinter, TSC, HPRT, Gprinter… đều được), cổng 9100.
 
 ### Chuyển dữ liệu từ app cũ / KiotViet
 

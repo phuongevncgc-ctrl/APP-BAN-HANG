@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { get, post, put, del } from '../api.js';
+import { get, post, put, del, downloadUrl } from '../api.js';
+import Ledger from '../components/Ledger.jsx';
 import { money, vnd, dateTime, dateOnly, METHOD_NAMES } from '../format.js';
 import { Field, Loading, Modal, MoneyInput, useAction, useLoad, useDebounced, confirmAsk } from '../components/ui.jsx';
 import { useUser, isOwner, go } from '../App.jsx';
@@ -61,6 +62,7 @@ function CustomerDetail({ id, priceLists, onClose, onChanged }) {
   const state = useLoad(() => get(`/customers/${id}`), [id]);
   const [editing, setEditing] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [tab, setTab] = useState('history');
   const [run] = useAction();
   const reload = () => {
     state.reload();
@@ -84,6 +86,12 @@ function CustomerDetail({ id, priceLists, onClose, onChanged }) {
               <button className="btn grow" onClick={() => setEditing(true)}>✎ Sửa</button>
               {owner && <button className="btn btn-danger" onClick={async () => { if (confirmAsk('Xoá khách này?') && (await run(() => del(`/customers/${id}`), 'Đã xoá'))) { onChanged(); onClose(); } }}>Xoá</button>}
             </div>
+            <div className="seg">
+              <button className={tab === 'history' ? 'on' : ''} onClick={() => setTab('history')}>Lịch sử mua</button>
+              <button className={tab === 'ledger' ? 'on' : ''} onClick={() => setTab('ledger')}>📒 Sổ công nợ</button>
+            </div>
+            {tab === 'ledger' && <Ledger kind="customer" id={c.id} />}
+            {tab === 'history' && <>
             {c.debt_invoices.length > 0 && (
               <>
                 <h4>Hoá đơn còn nợ</h4>
@@ -120,6 +128,7 @@ function CustomerDetail({ id, priceLists, onClose, onChanged }) {
                 </div>
               </>
             )}
+            </>}
             {editing && <CustomerForm customer={c} priceLists={priceLists} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); reload(); }} />}
             {paying && <PayDebt customer={c} onClose={() => setPaying(false)} onDone={() => { setPaying(false); reload(); }} />}
           </>
@@ -130,6 +139,7 @@ function CustomerDetail({ id, priceLists, onClose, onChanged }) {
 }
 
 export default function Customers({ route }) {
+  const owner = isOwner(useUser());
   const [q, setQ] = useState('');
   const [debtOnly, setDebtOnly] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -141,7 +151,10 @@ export default function Customers({ route }) {
     <div className="page">
       <div className="page-head">
         <h1>Khách hàng</h1>
-        <button className="btn btn-primary" onClick={() => setAdding(true)}>+ Thêm khách</button>
+        <div className="row gap">
+          {owner && <a className="btn" href={downloadUrl(`/export/customers.xlsx${debtOnly ? '?debt=1' : ''}`)} download title="Xuất Excel công nợ">📥 Excel</a>}
+          <button className="btn btn-primary" onClick={() => setAdding(true)}>+ Thêm khách</button>
+        </div>
       </div>
       <input className="input" placeholder="🔍 Tên, số điện thoại" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="chips">

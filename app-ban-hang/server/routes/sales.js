@@ -15,6 +15,21 @@ export function moveStock(db, productId, delta, kind, refId) {
   );
 }
 
+// Thành phần của combo (qty theo đơn vị gốc của từng món). Hàng thường trả về null.
+export function comboParts(db, productId) {
+  const p = db.prepare('SELECT is_combo FROM products WHERE id = ?').get(productId);
+  if (!p?.is_combo) return null;
+  return db.prepare(`SELECT ci.item_id AS product_id, ci.qty, p.cost, p.name FROM combo_items ci
+    JOIN products p ON p.id = ci.item_id WHERE ci.combo_id = ?`).all(productId);
+}
+
+// Trừ / cộng kho cho một dòng hàng: combo thì đi vào từng món bên trong.
+function moveLineStock(db, productId, components, baseQty, kind, refId) {
+  const parts = typeof components === 'string' ? JSON.parse(components) : components;
+  if (parts?.length) for (const c of parts) moveStock(db, c.product_id, baseQty * c.qty, kind, refId);
+  else if (productId) moveStock(db, productId, baseQty, kind, refId);
+}
+
 // Tìm đơn vị bán: unitId rỗng = đơn vị gốc (hệ số 1).
 export function resolveUnit(db, product, unitId) {
   const id = idOrNull(unitId);
@@ -29,7 +44,11 @@ function checkStock(db, lines) {
   const allow = db.prepare("SELECT value FROM settings WHERE key = 'allow_negative_stock'").get()?.value !== '0';
   if (allow) return;
   const need = new Map();
-  for (const l of lines) need.set(l.p.id, (need.get(l.p.id) ?? 0) + l.qty * l.u.factor);
+  for (const l of lines) {
+    for (const c of l.parts ?? [{ product_id: l.p.id, qty: 1 }]) {
+      need.set(c.product_id, (need.get(c.product_id) ?? 0) + l.qty * l.u.factor * c.qty);
+    }
+  }
   for (const [pid, q] of need) {
     const p = db.prepare('SELECT name, stock, track_stock, unit FROM products WHERE id = ?').get(pid);
     if (p.track_stock && p.stock < q - 1e-9) throw bad(`Không đủ hàng: "${p.name}" chỉ còn ${p.stock} ${p.unit}`);
@@ -60,7 +79,11 @@ export function createInvoice(db, user, body) {
     const price = money(it.price, 'Giá bán');
     const discount = money(it.discount, 'Giảm giá');
     if (discount > price) throw bad(`Giảm giá của "${p.name}" lớn hơn giá bán`);
-    return { p, u, qty: q, price, discount, total: Math.round(q * (price - discount)) };
+    const parts = comboParts(db, p.id);
+    if (parts && !parts.length) throw bad(`Combo "${p.name}" chưa có món nào bên trong`);
+    // Giá vốn 1 đơn vị gốc: combo = tổng giá vốn các món bên trong
+    const baseCost = parts ? parts.reduce((s, c) => s + c.cost * c.qty, 0) : p.cost;
+    return { p, u, parts, baseCost, qty: q, price, discount, total: Math.round(q * (price - discount)) };
   });
   checkStock(db, lines);
 
@@ -90,10 +113,13 @@ export function createInvoice(db, user, body) {
       code, user.id, customerId, priceListId, subtotal, discount, total, paid, change, debt, str(body.note),
     );
     const insItem = db.prepare(`INSERT INTO invoice_items
-      (invoice_id, product_id, name, unit_id, unit, factor, qty, price, discount, cost, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      (invoice_id, product_id, name, unit_id, unit, factor, qty, price, discount, cost, total, components)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     for (const l of lines) {
-      insItem.run(id, l.p.id, l.p.name, l.u.unit_id, l.u.unit, l.u.factor, l.qty, l.price, l.discount, Math.round(l.p.cost * l.u.factor), l.total);
-      moveStock(db, l.p.id, -l.qty * l.u.factor, 'sale', id);
+      const components = l.parts ? JSON.stringify(l.parts.map((c) => ({ product_id: c.product_id, qty: c.qty }))) : null;
+      insItem.run(id, l.p.id, l.p.name, l.u.unit_id, l.u.unit, l.u.factor, l.qty, l.price, l.discount,
+        Math.round(l.baseCost * l.u.factor), l.total, components);
+      moveLineStock(db, l.p.id, l.parts, -l.qty * l.u.factor, 'sale', id);
     }
     if (idOrNull(body.draft_id)) db.prepare('DELETE FROM drafts WHERE id = ?').run(idOrNull(body.draft_id));
     for (const p of pays) {
@@ -106,14 +132,15 @@ export function createInvoice(db, user, body) {
 
 export function getInvoice(db, id, withCost) {
   const inv = db.prepare(`SELECT i.*, c.name AS customer_name, c.phone AS customer_phone, c.code AS customer_code,
-      u.name AS user_name, pl.name AS price_list_name
+      c.address AS customer_address, c.tax_code AS customer_tax_code, c.debt AS customer_debt, u.name AS user_name, pl.name AS price_list_name
     FROM invoices i
     LEFT JOIN customers c ON c.id = i.customer_id
     LEFT JOIN users u ON u.id = i.user_id
     LEFT JOIN price_lists pl ON pl.id = i.price_list_id
     WHERE i.id = ?`).get(id);
   if (!inv) throw notFound('Không tìm thấy hoá đơn');
-  inv.items = db.prepare('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY id').all(id);
+  inv.items = db.prepare(`SELECT it.*, p.code AS product_code, p.barcode AS product_barcode FROM invoice_items it
+    LEFT JOIN products p ON p.id = it.product_id WHERE it.invoice_id = ? ORDER BY it.id`).all(id);
   if (!withCost) for (const it of inv.items) delete it.cost;
   inv.payments = db.prepare("SELECT method, amount, created_at, note FROM payments WHERE kind = 'sale' AND ref_id = ? ORDER BY id").all(id);
   inv.returns = db.prepare('SELECT id, code, created_at, total FROM returns WHERE invoice_id = ? ORDER BY id').all(id);
@@ -156,7 +183,7 @@ export function createReturn(db, user, body) {
       db.prepare(`INSERT INTO return_items (return_id, invoice_item_id, product_id, name, unit, factor, qty, price, cost, total)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, l.it.id, l.it.product_id, l.it.name, l.it.unit, l.it.factor, l.qty, l.price, l.it.cost, l.total);
       db.prepare('UPDATE invoice_items SET returned_qty = returned_qty + ? WHERE id = ?').run(l.qty, l.it.id);
-      if (l.it.product_id) moveStock(db, l.it.product_id, l.qty * l.it.factor, 'return', id);
+      moveLineStock(db, l.it.product_id, l.it.components, l.qty * l.it.factor, 'return', id);
     }
     if (method === 'debt') {
       db.prepare('UPDATE customers SET debt = debt - ? WHERE id = ?').run(total, inv.customer_id);
@@ -175,7 +202,7 @@ export function cancelInvoice(db, user, id) {
   return tx(db, () => {
     db.prepare("UPDATE invoices SET status = 'cancelled' WHERE id = ?").run(id);
     for (const it of db.prepare('SELECT * FROM invoice_items WHERE invoice_id = ?').all(id)) {
-      if (it.product_id) moveStock(db, it.product_id, it.qty * it.factor, 'cancel', id);
+      moveLineStock(db, it.product_id, it.components, it.qty * it.factor, 'cancel', id);
     }
     for (const p of db.prepare("SELECT method, SUM(amount) AS amount FROM payments WHERE kind = 'sale' AND ref_id = ? GROUP BY method").all(id)) {
       if (p.amount) addPayment(db, { kind: 'sale', ref_id: id, customer_id: inv.customer_id, method: p.method, amount: -p.amount, user_id: user.id, note: 'Huỷ hoá đơn' });
@@ -221,10 +248,11 @@ export function createPurchase(db, user, body) {
 }
 
 function readStockLines(db, items) {
-  const getProduct = db.prepare('SELECT id, name, unit, cost, stock FROM products WHERE id = ?');
+  const getProduct = db.prepare('SELECT id, name, unit, cost, stock, is_combo FROM products WHERE id = ?');
   return items.map((it) => {
     const p = getProduct.get(idOrNull(it.product_id));
     if (!p) throw bad('Có mặt hàng không tồn tại');
+    if (p.is_combo) throw bad(`"${p.name}" là combo, hãy nhập / trả từng món bên trong`);
     const u = resolveUnit(db, p, it.unit_id);
     const q = toQty(it.qty);
     const cost = money(it.cost, 'Giá nhập');
@@ -351,7 +379,12 @@ export default function salesRoutes(db) {
     const p = db.prepare(`SELECT p.*, s.name AS supplier_name FROM purchases p
       LEFT JOIN suppliers s ON s.id = p.supplier_id WHERE p.id = ?`).get(Number(req.params.id));
     if (!p) throw notFound();
-    p.items = db.prepare('SELECT * FROM purchase_items WHERE purchase_id = ?').all(p.id);
+    // Kèm mã, mã vạch, giá bán theo đúng đơn vị để in tem
+    p.items = db.prepare(`SELECT it.*, pr.name AS product_name,
+        COALESCE(NULLIF(u.code, ''), pr.code) AS code, COALESCE(NULLIF(u.barcode, ''), CASE WHEN u.id IS NULL THEN pr.barcode END) AS barcode,
+        COALESCE(u.price, pr.price) AS sell_price
+      FROM purchase_items it JOIN products pr ON pr.id = it.product_id
+      LEFT JOIN product_units u ON u.id = it.unit_id WHERE it.purchase_id = ?`).all(p.id);
     res.json(p);
   });
 

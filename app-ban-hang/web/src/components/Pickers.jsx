@@ -86,9 +86,9 @@ export function ProductSearch({ priceListId, onPick, showCost = false, autoFocus
               <button className="psearch-main" onClick={() => pick(p)}>
                 {p.image ? <img src={imageUrl(p.image)} alt="" /> : <span className="thumb">📦</span>}
                 <span className="grow">
-                  <b>{p.name}</b> - <b className="unit">{p.unit}</b>
+                  {p.is_combo ? <span className="badge badge-blue">Combo</span> : null} <b>{p.name}</b> - <b className="unit">{p.unit}</b>
                   <small className="muted block">
-                    {p.code} · Tồn: <span className={p.stock <= 0 && p.track_stock ? 'neg' : ''}>{num(p.stock)}</span>
+                    {p.code} · {p.is_combo ? 'Ráp được' : 'Tồn'}: <span className={p.stock <= 0 && (p.track_stock || p.is_combo) ? 'neg' : ''}>{num(p.stock)}</span>
                     {showCost && p.cost !== undefined && ` · Vốn: ${money(p.cost)}`}
                   </small>
                 </span>

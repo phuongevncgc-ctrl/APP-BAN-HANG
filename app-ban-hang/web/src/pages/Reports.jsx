@@ -53,6 +53,8 @@ export default function Reports() {
               <Stat label="Lợi nhuận" value={money(r.profit)} tone={r.profit < 0 ? 'neg' : 'pos'} sub={r.revenue ? `${Math.round((r.profit / r.revenue) * 100)}% doanh thu` : ''} />
               <Stat label="Trả hàng" value={money(r.returns.total)} sub={`${r.returns.count} phiếu`} />
               <Stat label="Giảm giá HĐ" value={money(r.sales.discount)} />
+              {(r.expenses > 0 || r.otherIncome > 0) && <Stat label="Chi phí (sổ quỹ)" value={money(r.expenses)} sub={r.otherIncome ? `Thu khác ${money(r.otherIncome)}` : ''} onClick={() => go('thu-chi')} />}
+              {(r.expenses > 0 || r.otherIncome > 0) && <Stat label="Lãi sau chi phí" value={money(r.netProfit)} tone={r.netProfit < 0 ? 'neg' : 'pos'} />}
             </div>
             <h4>Tiền thu chi trong kỳ</h4>
             <div className="cards">
@@ -61,7 +63,7 @@ export default function Reports() {
               {r.cashflow.card !== 0 && <Stat label="Thẻ" value={money(r.cashflow.card)} />}
               <Stat label="Bán chịu trong kỳ" value={money(r.sales.debt)} tone="neg" />
             </div>
-            <p className="muted small">Tiền thu chi đã gồm: tiền bán hàng, thu nợ, hoàn tiền trả hàng và tiền trả nhà cung cấp.</p>
+            <p className="muted small">Tiền thu chi đã gồm: tiền bán hàng, thu nợ, hoàn tiền trả hàng, tiền trả nhà cung cấp và phiếu thu chi.</p>
             <h4>Tổng quan cửa hàng</h4>
             <div className="cards">
               <Stat label="Khách đang nợ" value={money(r.customerDebt)} tone="neg" onClick={() => go('khach-hang')} />

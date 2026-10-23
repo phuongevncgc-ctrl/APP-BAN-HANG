@@ -50,6 +50,12 @@ export function report(db, from, to) {
     WHERE date(created_at) BETWEEN ? AND ? GROUP BY method, kind`).all(from, to);
   const cashflow = { cash: 0, transfer: 0, card: 0 };
   for (const m of methods) cashflow[m.method] += m.amount;
+  // Phiếu thu chi trong sổ quỹ
+  const entries = db.prepare(`SELECT kind, category, method, SUM(amount) AS amount FROM cash_entries
+    WHERE date(created_at) BETWEEN ? AND ? GROUP BY kind, category, method`).all(from, to);
+  for (const e of entries) cashflow[e.method] += e.kind === 'in' ? e.amount : -e.amount;
+  const expenses = entries.filter((e) => e.category === 'expense').reduce((s, e) => s + e.amount, 0);
+  const otherIncome = entries.filter((e) => e.category === 'other_in').reduce((s, e) => s + e.amount, 0);
 
   const byUser = db.prepare(`SELECT u.name, COUNT(*) AS count, SUM(i.total) AS total FROM invoices i
     LEFT JOIN users u ON u.id = i.user_id WHERE i.status = 'done' AND date(i.created_at) BETWEEN ? AND ?
@@ -58,6 +64,7 @@ export function report(db, from, to) {
   return {
     from, to,
     sales, returns, revenue, cost, profit: revenue - cost,
+    expenses, otherIncome, netProfit: revenue - cost - expenses + otherIncome,
     byDay, topProducts, cashflow, methods, byUser,
     customerDebt: db.prepare('SELECT COALESCE(SUM(debt),0) AS s FROM customers WHERE active = 1').get().s,
     supplierDebt: db.prepare('SELECT COALESCE(SUM(debt),0) AS s FROM suppliers WHERE active = 1').get().s,

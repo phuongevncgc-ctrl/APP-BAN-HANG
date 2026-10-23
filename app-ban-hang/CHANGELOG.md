@@ -1,0 +1,16 @@
+# Nhật ký thay đổi
+
+## 0.2.0
+
+- **Combo hàng hoá**: ghép nhiều món thành một combo. Bán combo thì kho trừ từng món bên trong, trả hàng / huỷ hoá đơn cộng lại đúng công thức lúc bán. Tồn combo tự tính theo số bộ ráp được.
+- **Xuất Excel**: danh sách hàng hoá (có ĐVT quy đổi, bảng giá, nhập lại vào app được), công nợ khách hàng và nhà cung cấp (tổng hợp + sổ chi tiết: nợ đầu kỳ, tiền hàng, đã thanh toán, chiết khấu, trả hàng, còn nợ), danh sách hoá đơn và chi tiết hàng bán.
+- **Sổ công nợ** trong từng khách / nhà cung cấp, in biên bản đối chiếu công nợ khổ A4.
+- **Máy in qua IP** (cùng mạng với Home Assistant): hoá đơn K80 / K58, tem mã vạch 1–3 tem một hàng (cuộn 2 tem), in thử, kiểm tra kết nối. Không có máy in IP thì in bằng trình duyệt như cũ.
+- **Hoá đơn A4** có mã hàng, khách hàng, tổng nợ, chỗ ký.
+- **Thu chi (sổ quỹ)**: phiếu thu, phiếu chi, tồn quỹ tiền mặt / chuyển khoản theo ngày. Báo cáo có "Lãi sau chi phí".
+- **Chốt ca**: tổng kết tiền trong ngày, in ra máy in hoá đơn.
+- **Kiểm kho nhiều món**: quét từng món, nhập số đếm, lưu là cân lại tồn kho, giữ lịch sử lệch kho.
+
+## 0.1.0
+
+- Bản đầu tiên: bán hàng, đơn vị quy đổi, bảng giá, giảm giá từng món, tách thanh toán, trả hàng, công nợ, nhập hàng, báo cáo, sao lưu.
