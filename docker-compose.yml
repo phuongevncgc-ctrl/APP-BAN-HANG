@@ -1,0 +1,13 @@
+# Chạy bằng Docker thường (không qua Home Assistant):
+#   docker compose up -d --build
+# Rồi mở http://ip-may:8099
+services:
+  ban-hang:
+    build: ./app-ban-hang
+    restart: unless-stopped
+    ports:
+      - "8099:8099"
+    volumes:
+      - ./data:/data
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
