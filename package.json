@@ -1,0 +1,31 @@
+{
+  "name": "app-ban-hang",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Phần mềm bán hàng chạy trên máy nhà (Home Assistant / Docker)",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "concurrently -n api,web \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "node --disable-warning=ExperimentalWarning --watch server/index.js",
+    "dev:web": "vite",
+    "build": "vite build",
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "test": "node --disable-warning=ExperimentalWarning --test server/test/*.test.js"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.7.0",
+    "@zxing/browser": "^0.1.5",
+    "concurrently": "^9.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^6.3.5"
+  }
+}

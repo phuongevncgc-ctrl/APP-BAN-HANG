@@ -1,0 +1,32 @@
+# Cấu hình add-on Home Assistant
+name: Bán hàng
+version: "0.1.0"
+slug: ban_hang
+description: Phần mềm bán hàng chạy ngay trên máy Home Assistant, dùng được trên điện thoại và máy tính
+url: https://github.com/phuongevncgc-ctrl/APP-BAN-HANG
+arch:
+  - amd64
+  - aarch64
+init: false
+startup: application
+boot: auto
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:cash-register
+panel_title: Bán hàng
+ports:
+  8099/tcp: 8099
+ports_description:
+  8099/tcp: Mở app bán hàng trong mạng nhà (http://ip-may-home-assistant:8099)
+map:
+  - type: ssl
+options:
+  ssl: false
+  certfile: fullchain.pem
+  keyfile: privkey.pem
+  backup_keep_days: 30
+schema:
+  ssl: bool
+  certfile: str
+  keyfile: str
+  backup_keep_days: int(1,365)
