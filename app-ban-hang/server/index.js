@@ -34,7 +34,7 @@ const server = ssl
   : http.createServer(app);
 
 server.listen(port, () => {
-  console.log(`App bán hàng đang chạy ở ${ssl ? 'https' : 'http'}://0.0.0.0:${port} (dữ liệu: ${dataDir})`);
+  console.log(`PSell đang chạy ở ${ssl ? 'https' : 'http'}://0.0.0.0:${port} (dữ liệu: ${dataDir})`);
 });
 
 // Sao lưu tự động: lúc khởi động (nếu hôm nay chưa có) và mỗi ngày lúc 23:30.

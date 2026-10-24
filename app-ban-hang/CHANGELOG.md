@@ -1,5 +1,9 @@
 # Nhật ký thay đổi
 
+## 0.2.3
+
+- Đổi tên app thành **PSell**. Dữ liệu giữ nguyên, cập nhật như bình thường.
+
 ## 0.2.2
 
 - Nhập file KiotViet an toàn hơn: **xem trước** thêm / sửa gì (giá cũ → giá mới, tồn cũ → tồn mới) rồi mới đồng ý nhập.

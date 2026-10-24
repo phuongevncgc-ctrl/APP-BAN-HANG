@@ -56,7 +56,7 @@ function Setup({ onDone }) {
   };
   return (
     <form className="auth card" onSubmit={submit}>
-      <h1>Chào mừng!</h1>
+      <h1>Chào mừng đến với PSell!</h1>
       <p className="muted">Lần đầu dùng, hãy tạo tài khoản chủ cửa hàng.</p>
       <Field label="Tên cửa hàng"><input className="input" value={f.shop_name} onChange={(e) => setF({ ...f, shop_name: e.target.value })} /></Field>
       <Field label="Tên của bạn"><input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
@@ -82,7 +82,7 @@ function Login({ shopName, onDone }) {
   };
   return (
     <form className="auth card" onSubmit={submit}>
-      <h1>{shopName || 'Bán hàng'}</h1>
+      <h1>{shopName || 'PSell'}</h1>
       <Field label="Tên đăng nhập">
         <input className="input" autoCapitalize="none" autoComplete="username" value={f.username} onChange={(e) => setF({ ...f, username: e.target.value })} />
       </Field>
@@ -110,7 +110,7 @@ function Layout({ user, reloadSettings }) {
             <span className="nav-icon">{n.icon}</span> {n.label}
           </a>
         ))}
-        <div className="sidebar-user">👤 {user.name}</div>
+        <div className="sidebar-user">👤 {user.name}<small className="block muted">PSell</small></div>
       </nav>
       <main className="main">
         <Page route={route} reloadSettings={reloadSettings} />

@@ -1,6 +1,6 @@
-# App bán hàng
+# PSell
 
-Phần mềm bán hàng cho cửa hàng nhỏ, chạy ngay trên máy Home Assistant trong nhà. Mở được trên điện thoại Android, iPhone và máy tính, chữ to, nút to, dễ bấm. Dữ liệu nằm trong nhà, không mất tiền thuê bao.
+**PSell** là phần mềm bán hàng cho cửa hàng nhỏ, chạy ngay trên máy Home Assistant trong nhà. Mở được trên điện thoại Android, iPhone và máy tính, chữ to, nút to, dễ bấm. Dữ liệu nằm trong nhà, không mất tiền thuê bao.
 
 ## Có những gì
 
@@ -28,9 +28,9 @@ Phần mềm bán hàng cho cửa hàng nhỏ, chạy ngay trên máy Home Assis
 1. Trong Home Assistant, vào **Cài đặt → Tiện ích bổ sung (Add-ons) → Cửa hàng tiện ích**.
 2. Bấm dấu **⋮** góc trên bên phải → **Kho lưu trữ (Repositories)**, dán địa chỉ:
    `https://github.com/phuongevncgc-ctrl/APP-BAN-HANG` rồi bấm **Thêm**.
-3. Tải lại trang, tìm **Bán hàng** → **Cài đặt**. Lần đầu máy sẽ tự dựng app, mất khoảng 5–10 phút.
+3. Tải lại trang, tìm **PSell** → **Cài đặt**. Lần đầu máy sẽ tự dựng app, mất khoảng 5–10 phút.
 4. Bấm **Khởi động**, bật **Hiện trên thanh bên**.
-5. Bấm **Bán hàng** ở thanh bên trái, tạo tài khoản chủ cửa hàng.
+5. Bấm **PSell** ở thanh bên trái, tạo tài khoản chủ cửa hàng.
 
 > Kho GitHub cần để chế độ **Public** thì Home Assistant mới tải về được.
 
@@ -38,7 +38,7 @@ Phần mềm bán hàng cho cửa hàng nhỏ, chạy ngay trên máy Home Assis
 
 - Điện thoại bắt cùng wifi, mở trình duyệt vào `http://<địa-chỉ-IP-máy-Home-Assistant>:8099`.
 - Bấm **Thêm vào màn hình chính** để dùng như app.
-- **Quét mã vạch bằng camera** chỉ chạy khi mở bằng địa chỉ `https://` (luật của điện thoại). Cách dễ nhất là mở qua app Home Assistant (thanh bên → Bán hàng) khi Home Assistant đã có https. Máy quét mã vạch USB / Bluetooth thì dùng được ngay.
+- **Quét mã vạch bằng camera** chỉ chạy khi mở bằng địa chỉ `https://` (luật của điện thoại). Cách dễ nhất là mở qua app Home Assistant (thanh bên → PSell) khi Home Assistant đã có https. Máy quét mã vạch USB / Bluetooth thì dùng được ngay.
 - Muốn mở thẳng cổng 8099 bằng https: trong tab **Cấu hình** của add-on, bật `ssl` và điền tên file chứng chỉ trong thư mục `/ssl` của Home Assistant.
 
 ### Cài máy in qua IP

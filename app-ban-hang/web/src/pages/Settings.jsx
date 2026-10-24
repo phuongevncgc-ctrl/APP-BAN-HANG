@@ -274,7 +274,7 @@ function HttpsHelp() {
   return (
     <div className="card warn-card">
       <h3>📷 Muốn quét mã vạch bằng camera điện thoại?</h3>
-      <p>Điện thoại chỉ cho mở camera khi app chạy bằng địa chỉ <b>https://</b>. Cách dễ nhất: mở app qua Home Assistant (thanh bên trái → Bán hàng) bằng địa chỉ https của Home Assistant. Máy quét mã vạch cắm USB / Bluetooth thì dùng được ngay, không cần https.</p>
+      <p>Điện thoại chỉ cho mở camera khi app chạy bằng địa chỉ <b>https://</b>. Cách dễ nhất: mở app qua Home Assistant (thanh bên trái → PSell) bằng địa chỉ https của Home Assistant. Máy quét mã vạch cắm USB / Bluetooth thì dùng được ngay, không cần https.</p>
     </div>
   );
 }

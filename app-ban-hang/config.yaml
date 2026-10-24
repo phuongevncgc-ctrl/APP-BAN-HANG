@@ -1,8 +1,8 @@
 # Cấu hình add-on Home Assistant
-name: Bán hàng
-version: "0.2.2"
+name: PSell
+version: "0.2.3"
 slug: ban_hang
-description: Phần mềm bán hàng chạy ngay trên máy Home Assistant, dùng được trên điện thoại và máy tính
+description: PSell - phần mềm bán hàng chạy ngay trên máy Home Assistant, dùng được trên điện thoại và máy tính
 url: https://github.com/phuongevncgc-ctrl/APP-BAN-HANG
 arch:
   - amd64
@@ -13,12 +13,12 @@ boot: auto
 ingress: true
 ingress_port: 8099
 panel_icon: mdi:cash-register
-panel_title: Bán hàng
+panel_title: PSell
 panel_admin: false
 ports:
   8099/tcp: 8099
 ports_description:
-  8099/tcp: Mở app bán hàng trong mạng nhà (http://ip-may-home-assistant:8099)
+  8099/tcp: Mở PSell trong mạng nhà (http://ip-may-home-assistant:8099)
 map:
   - type: ssl
 options:

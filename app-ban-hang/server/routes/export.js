@@ -49,7 +49,7 @@ async function send(res, wb, filename) {
 }
 
 const stamp = () => new Date().toLocaleDateString('sv').replaceAll('-', '');
-const book = () => Object.assign(new ExcelJS.Workbook(), { creator: 'App bán hàng' });
+const book = () => Object.assign(new ExcelJS.Workbook(), { creator: 'PSell' });
 
 const LEDGER_COLUMNS = [
   { header: 'Thời gian', key: 'created_at', width: 18 },

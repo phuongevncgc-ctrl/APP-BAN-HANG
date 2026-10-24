@@ -1,6 +1,6 @@
 {
-  "name": "Bán hàng",
-  "short_name": "Bán hàng",
+  "name": "PSell - Bán hàng",
+  "short_name": "PSell",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
