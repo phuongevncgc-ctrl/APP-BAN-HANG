@@ -1,5 +1,14 @@
 # Nhật ký thay đổi
 
+## 0.2.2
+
+- Nhập file KiotViet an toàn hơn: **xem trước** thêm / sửa gì (giá cũ → giá mới, tồn cũ → tồn mới) rồi mới đồng ý nhập.
+- Cột nào không có hoặc để trống trong file thì **giữ nguyên** dữ liệu trong app (trước đây có thể bị ghi về 0).
+- Nhập lại file giống hệt thì báo "giữ nguyên", không đổi gì.
+- Cột trùng tên bảng giá (vd "Giá sỉ") thì cập nhật bảng giá. File chỉ có mã ĐVT quy đổi (vd file bảng giá) cập nhật đúng đơn vị, không tạo hàng mới.
+- Nhập **khách hàng** và **nhà cung cấp** từ file KiotViet, kèm số nợ.
+- Tự tải ảnh hàng hoá từ link ảnh KiotViet.
+
 ## 0.2.1
 
 - Trả hàng: khách còn nợ thì mặc định "Trừ vào nợ", cảnh báo nếu chọn hoàn tiền mặt. Số tiền hoàn hiện trên nút tính giống hệt máy chủ.

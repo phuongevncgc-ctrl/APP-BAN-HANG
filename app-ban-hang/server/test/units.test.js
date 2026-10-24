@@ -130,8 +130,70 @@ test('nhập Excel KiotViet: gom đơn vị, gỡ hàng tách sai', async () => 
   // Nhập lại lần 2: cập nhật, không nhân đôi
   const r2 = await call('POST', '/products/import', null, buf);
   assert.equal(r2.created, 0);
-  assert.equal(r2.updated, 3);
+  assert.equal(r2.updated, 0);
+  assert.equal(r2.unchanged, 3);
   assert.equal((await get('/products/stats')).total, 4);
+});
+
+const xlsx = async (rows, title) => {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Sheet1');
+  if (title) ws.addRow([title]);
+  for (const r of rows) ws.addRow(r);
+  return Buffer.from(await wb.xlsx.writeBuffer());
+};
+
+test('cập nhật từ KiotViet: xem trước, chỉ đổi cột có trong file, bảng giá, giá theo mã ĐVT', async () => {
+  const before = (await get('/products?q=BMO3000'))[0];
+  // File chỉ có mã + giá bán (vd xuất bảng giá): không được xoá giá vốn, tồn kho
+  const buf = await xlsx([
+    ['Mã hàng', 'Tên hàng', 'Giá bán', 'Giá sỉ'],
+    ['BMO3000', 'Dây điện Cadivi 2.5', 9500, 9000],
+    ['BMO3000C', 'Dây điện Cadivi 2.5', 900000, 880000],
+    ['MOI01', 'Hàng mới', 5000, ''],
+  ], 'Danh sách hàng hoá');
+  const dry = await call('POST', '/products/import?dry=1', null, buf);
+  assert.equal(dry.dryRun, true);
+  assert.equal(dry.created, 1);
+  assert.equal(dry.updated, 1);
+  assert.deepEqual(dry.changes.map((c) => [c.code, c.from, c.to]), [['BMO3000', 9000, 9500], ['BMO3000C', 850000, 900000]]);
+  assert.equal((await get('/products?q=BMO3000'))[0].price, 9000, 'xem trước không được đổi dữ liệu');
+  assert.equal((await get('/products?q=MOI01')).length, 0);
+
+  await call('POST', '/products/import', null, buf);
+  const p = (await get(`/products/${before.id}`));
+  assert.equal(p.price, 9500);
+  assert.equal(p.cost, before.cost);
+  assert.equal(p.stock, before.stock);
+  assert.equal(p.unit, 'Mét');
+  assert.equal(p.units[0].price, 900000);
+  assert.deepEqual(p.prices, { '1:0': 9000, [`1:${p.units[0].id}`]: 880000 });
+  assert.equal((await get('/products?q=BMO3000C'))[0].id, before.id, 'mã ĐVT không thành hàng mới');
+});
+
+test('nhập khách hàng và nhà cung cấp từ KiotViet', async () => {
+  const buf = await xlsx([
+    ['Mã khách hàng', 'Tên khách hàng', 'Điện thoại', 'Địa chỉ', 'Nợ cần thu hiện tại'],
+    ['KH000050', 'Chú Bảy', '0901 222 333', 'Chợ Lớn', 1500000],
+    ['KH000051', 'Cô Tám', '', '', 0],
+  ]);
+  const r = await call('POST', '/products/import', null, buf);
+  assert.equal(r.kind, 'customers');
+  assert.equal(r.created, 2);
+  const [c] = await get('/customers?q=chu%20bay');
+  assert.equal(c.code, 'KH000050');
+  assert.equal(c.phone, '0901222333');
+  assert.equal(c.debt, 1500000);
+  const again = await call('POST', '/products/import?update_stock=0', null, await xlsx([
+    ['Mã khách hàng', 'Tên khách hàng', 'Nợ cần thu hiện tại'], ['KH000050', 'Chú Bảy', 999],
+  ]));
+  assert.equal(again.created, 0);
+  assert.equal((await get('/customers?q=chu%20bay'))[0].debt, 1500000, 'không tick cập nhật nợ thì giữ nguyên');
+  const s = await call('POST', '/products/import', null, await xlsx([
+    ['Mã nhà cung cấp', 'Tên nhà cung cấp', 'Điện thoại', 'Nợ cần trả hiện tại'], ['NCC01', 'Cadivi', '028', 2000000],
+  ]));
+  assert.equal(s.kind, 'suppliers');
+  assert.equal(s.created, 1);
 });
 
 test('chuyển dữ liệu từ db.json app cũ', async () => {

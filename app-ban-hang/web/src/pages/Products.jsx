@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
-import { get, post, put, del, imageUrl, getToken, downloadUrl } from '../api.js';
+import { get, post, put, del, imageUrl, downloadUrl } from '../api.js';
 import { money, num, dateTime } from '../format.js';
-import { Field, Loading, Modal, MoneyInput, QtyInput, useAction, useLoad, useDebounced, resizeImage, confirmAsk, useToast } from '../components/ui.jsx';
+import { Field, Loading, Modal, MoneyInput, QtyInput, useAction, useLoad, useDebounced, resizeImage, confirmAsk } from '../components/ui.jsx';
 import Scanner from '../components/Scanner.jsx';
 import { ProductSearch } from '../components/Pickers.jsx';
 import LabelDialog, { labelItemsFromProduct } from '../components/Labels.jsx';
 import { useUser, isOwner, go } from '../App.jsx';
 import PriceLists from './PriceLists.jsx';
 import StockCount from './StockCount.jsx';
+import ImportDialog from '../components/ImportDialog.jsx';
 
 const FILTERS = [['', 'Tất cả'], ['in', 'Còn hàng'], ['out', 'Hết hàng'], ['neg', 'Âm kho'], ['low', 'Tồn thấp']];
 const MOVE_NAMES = { count: 'Kiểm kho', sale: 'Bán hàng', cancel: 'Huỷ HĐ', return: 'Khách trả', purchase: 'Nhập hàng', supplier_return: 'Trả NCC', adjust: 'Cân bằng kho', init: 'Tồn đầu' };
@@ -275,68 +276,6 @@ function ProductForm({ id, categories, priceLists, onClose, onSaved, reloadCateg
   );
 }
 
-function ImportDialog({ onClose, onDone }) {
-  const [file, setFile] = useState(null);
-  const [updateStock, setUpdateStock] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null);
-  const [showErrors, setShowErrors] = useState(false);
-  const toast = useToast();
-  const submit = async () => {
-    setBusy(true);
-    try {
-      const res = await fetch(`api/products/import?update_stock=${updateStock ? 1 : 0}`, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${getToken()}`, 'content-type': 'application/octet-stream' },
-        body: file,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setResult(data);
-      onDone();
-    } catch (err) {
-      toast(err.message || 'Nhập file lỗi', 'error');
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Modal title="Nhập hàng hoá từ file" onClose={onClose}>
-      {!result ? (
-        <>
-          <p>Chọn một trong hai loại file:</p>
-          <ul>
-            <li><b>File Excel (.xlsx)</b> xuất từ KiotViet: Hàng hoá → Xuất file. Các ĐVT quy đổi sẽ tự gom vào đúng mặt hàng.</li>
-            <li><b>File db.json</b> của app bán hàng cũ (trong thư mục <i>data</i>): chuyển cả hàng hoá, khách hàng, công nợ, nhà cung cấp.</li>
-          </ul>
-          <input type="file" className="input" accept=".xlsx,.json" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          <label className="check"><input type="checkbox" checked={updateStock} onChange={(e) => setUpdateStock(e.target.checked)} /> Cập nhật số tồn kho theo file (với hàng đã có)</label>
-          <button className="btn btn-primary btn-lg btn-block" disabled={!file || busy} onClick={submit}>{busy ? 'Đang nhập…' : 'Bắt đầu nhập'}</button>
-        </>
-      ) : (
-        <>
-          <div className="done-box">
-            <div className="big pos">✅ Nhập xong</div>
-            <div>Thêm mới <b>{result.created}</b> hàng, cập nhật <b>{result.updated}</b> hàng, <b>{result.units}</b> đơn vị quy đổi.</div>
-            {result.merged > 0 && <div>Đã gom {result.merged} hàng tách sai vào đúng mặt hàng gốc.</div>}
-            {result.customers !== undefined && <div>Thêm {result.customers} khách hàng, {result.suppliers} nhà cung cấp.</div>}
-          </div>
-          {result.errors.length > 0 && (
-            <>
-              <button className="btn btn-block" onClick={() => setShowErrors(!showErrors)}>⚠️ {result.errors.length} dòng bị bỏ qua — {showErrors ? 'Ẩn' : 'Xem'}</button>
-              {showErrors && (
-                <div className="list small">
-                  {result.errors.map((e, i) => <div key={i} className="list-item">Dòng {e.row ?? '?'} {e.code}: {e.reason}</div>)}
-                </div>
-              )}
-            </>
-          )}
-          <button className="btn btn-primary btn-block" onClick={onClose}>Xong</button>
-        </>
-      )}
-    </Modal>
-  );
-}
 
 export default function Products({ route }) {
   const owner = isOwner(useUser());

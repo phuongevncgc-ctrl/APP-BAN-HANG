@@ -20,6 +20,31 @@ function saveImage(imagesDir, dataUrl) {
   return name;
 }
 
+// Tải ảnh hàng hoá từ link (ảnh KiotViet) về máy, chạy nền sau khi nhập file.
+async function downloadImages(db, imagesDir, jobs) {
+  const queue = [...jobs];
+  const worker = async () => {
+    while (queue.length) {
+      const { id, url } = queue.shift();
+      try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+        const type = /image\/(jpeg|png|webp)/.exec(res.headers.get('content-type') ?? '')?.[1];
+        if (!res.ok || !type) continue;
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (buf.length > 3 * 1024 * 1024) continue;
+        fs.mkdirSync(imagesDir, { recursive: true });
+        const name = `${crypto.randomBytes(8).toString('hex')}.${type === 'jpeg' ? 'jpg' : type}`;
+        fs.writeFileSync(path.join(imagesDir, name), buf);
+        const { changes } = db.prepare('UPDATE products SET image = ? WHERE id = ? AND image IS NULL').run(name, id);
+        if (!changes) fs.rmSync(path.join(imagesDir, name), { force: true });
+      } catch {
+        // Mất mạng hoặc link hỏng: bỏ qua ảnh này
+      }
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+}
+
 function removeImage(imagesDir, name) {
   if (name && /^[a-f0-9]+\.(jpg|png|webp)$/.test(name)) fs.rmSync(path.join(imagesDir, name), { force: true });
 }
@@ -336,7 +361,11 @@ export default function catalogRoutes(db, { imagesDir }) {
   // Nhập hàng hoá từ file: Excel xuất từ KiotViet (.xlsx) hoặc db.json của app cũ.
   r.post('/products/import', requireOwner, express.raw({ type: () => true, limit: '40mb' }), async (req, res) => {
     if (!req.body?.length) throw bad('Chưa chọn file');
-    res.json(await importProducts(db, req.body, { name: str(req.query.name), updateStock: req.query.update_stock !== '0' }));
+    const dryRun = req.query.dry === '1';
+    const result = await importProducts(db, req.body, { updateStock: req.query.update_stock !== '0', dryRun });
+    const images = result.images ?? [];
+    if (!dryRun && images.length) downloadImages(db, imagesDir, images);
+    res.json({ ...result, images: images.length });
   });
 
   // ---------- Nhóm hàng ----------

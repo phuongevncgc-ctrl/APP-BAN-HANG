@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { get, post, put, del, downloadUrl } from '../api.js';
 import Ledger from '../components/Ledger.jsx';
+import ImportDialog from '../components/ImportDialog.jsx';
 import { money, vnd, dateTime, dateOnly, METHOD_NAMES } from '../format.js';
 import { Field, Loading, Modal, MoneyInput, useAction, useLoad, useDebounced, confirmAsk } from '../components/ui.jsx';
 import { useUser, isOwner, go } from '../App.jsx';
@@ -143,6 +144,7 @@ export default function Customers({ route }) {
   const [q, setQ] = useState('');
   const [debtOnly, setDebtOnly] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
   const dq = useDebounced(q);
   const list = useLoad(() => get(`/customers?q=${encodeURIComponent(dq)}&debt=${debtOnly ? 1 : 0}`), [dq, debtOnly]);
   const pls = useLoad(() => get('/price-lists'), []);
@@ -152,7 +154,8 @@ export default function Customers({ route }) {
       <div className="page-head">
         <h1>Khách hàng</h1>
         <div className="row gap">
-          {owner && <a className="btn" href={downloadUrl(`/export/customers.xlsx${debtOnly ? '?debt=1' : ''}`)} download title="Xuất Excel công nợ">📥 Excel</a>}
+          {owner && <button className="btn" onClick={() => setImporting(true)}>📥 Nhập file</button>}
+          {owner && <a className="btn" href={downloadUrl(`/export/customers.xlsx${debtOnly ? '?debt=1' : ''}`)} download title="Xuất Excel công nợ">📤 Excel</a>}
           <button className="btn btn-primary" onClick={() => setAdding(true)}>+ Thêm khách</button>
         </div>
       </div>
@@ -180,6 +183,7 @@ export default function Customers({ route }) {
           </>
         )}
       </Loading>
+      {importing && <ImportDialog onClose={() => setImporting(false)} onDone={list.reload} />}
       {adding && <CustomerForm priceLists={pls.data ?? []} onClose={() => setAdding(false)} onSaved={(id) => { setAdding(false); list.reload(); go(`khach-hang/${id}`); }} />}
       {openId && <CustomerDetail id={openId} priceLists={pls.data ?? []} onClose={() => go('khach-hang')} onChanged={list.reload} />}
     </div>
