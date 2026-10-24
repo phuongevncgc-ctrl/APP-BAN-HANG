@@ -60,8 +60,8 @@ export function ReceiptBody({ inv, settings }) {
 }
 
 // Hoá đơn khổ A4 (in bằng trình duyệt, chọn máy in A4 trong hộp thoại in)
-export function InvoiceA4({ inv, settings }) {
-  const remaining = inv.total - inv.paid;
+export function InvoiceA4({ inv, settings, quote = false }) {
+  const remaining = quote ? 0 : inv.total - inv.paid;
   return (
     <div className="a4">
       <style>{'@page { size: A4; margin: 10mm; }'}</style>
@@ -72,9 +72,9 @@ export function InvoiceA4({ inv, settings }) {
           {settings.shop_phone && <div>ĐT: {settings.shop_phone}</div>}
           {settings.bank_account && <div>STK: {settings.bank_account} - {settings.bank_holder}</div>}
         </div>
-        <div className="r"><b>Số: {inv.code}</b><div>Ngày: {dateTime(inv.created_at)}</div></div>
+        <div className="r">{inv.code && <b>Số: {inv.code}</b>}<div>Ngày: {dateTime(inv.created_at)}</div></div>
       </div>
-      <h2 className="center">HOÁ ĐƠN BÁN HÀNG</h2>
+      <h2 className="center">{quote ? 'BẢNG BÁO GIÁ' : 'HOÁ ĐƠN BÁN HÀNG'}</h2>
       <div style={{ margin: '3mm 0' }}>
         <div>Khách hàng: <b>{inv.customer_name || 'Khách lẻ'}</b>{inv.customer_code ? ` (${inv.customer_code})` : ''}</div>
         {inv.customer_phone && <div>Điện thoại: {inv.customer_phone}</div>}
@@ -104,15 +104,16 @@ export function InvoiceA4({ inv, settings }) {
         <div><span>Tổng tiền hàng</span><span>{money(inv.subtotal)}</span></div>
         {inv.discount > 0 && <div><span>Giảm giá hoá đơn</span><span>-{money(inv.discount)}</span></div>}
         <div style={{ fontWeight: 800, fontSize: 15 }}><span>TỔNG CỘNG</span><span>{money(inv.total)}</span></div>
-        <div><span>Khách đã trả</span><span>{money(inv.paid)}</span></div>
+        {!quote && <div><span>Khách đã trả</span><span>{money(inv.paid)}</span></div>}
         {remaining > 0 && <div style={{ fontWeight: 700 }}><span>Còn nợ hoá đơn này</span><span>{money(remaining)}</span></div>}
-        {inv.customer_id && inv.customer_debt > 0 && <div><span>Tổng nợ hiện tại của khách</span><span>{money(inv.customer_debt)}</span></div>}
+        {!quote && inv.customer_id && inv.customer_debt > 0 && <div><span>Tổng nợ hiện tại của khách</span><span>{money(inv.customer_debt)}</span></div>}
       </div>
       <p><i>Số tiền bằng chữ: {moneyToWords(inv.total)}</i></p>
+      {quote && <p><i>Giá trên có giá trị trong 7 ngày kể từ ngày báo giá. Rất mong được phục vụ quý khách.</i></p>}
       {inv.status === 'cancelled' && <h2 className="center">ĐÃ HUỶ</h2>}
       <div className="a4-sign">
-        <div><b>Người mua hàng</b><br /><small>(Ký, ghi rõ họ tên)</small></div>
-        <div><b>Người bán hàng</b><br /><small>(Ký, ghi rõ họ tên)</small><br /><br /><br /><br />{inv.user_name}</div>
+        <div><b>{quote ? 'Khách hàng' : 'Người mua hàng'}</b><br /><small>(Ký, ghi rõ họ tên)</small></div>
+        <div><b>{quote ? 'Người báo giá' : 'Người bán hàng'}</b><br /><small>(Ký, ghi rõ họ tên)</small><br /><br /><br /><br />{inv.user_name}</div>
       </div>
       {settings.receipt_footer && <p className="center">{settings.receipt_footer}</p>}
     </div>

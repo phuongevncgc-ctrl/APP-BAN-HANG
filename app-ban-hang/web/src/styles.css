@@ -344,3 +344,9 @@ details summary { cursor: pointer; font-weight: 600; min-height: 32px; }
   #root, .toasts { display: none !important; }
   #print-area { display: block; padding: 2mm; }
 }
+
+.last-price { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 4px 0 0; color: var(--primary); font-size: 0.9rem; cursor: pointer; }
+.last-price.muted { color: var(--muted); cursor: default; }
+.stock-table td:first-child { min-width: 160px; }
+.stock-table td, .stock-table th { white-space: nowrap; }
+.stock-table td:first-child { white-space: normal; }

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { get, post, del } from '../api.js';
-import { money, num, vnd, moneyToWords, dateTime } from '../format.js';
+import { money, num, vnd, moneyToWords, dateTime, dateOnly } from '../format.js';
 import { Modal, MoneyInput, QtyInput, Field, useAction, useToast, confirmAsk } from '../components/ui.jsx';
 import { ProductSearch, CustomerPicker, unitOptions } from '../components/Pickers.jsx';
-import { ReceiptActions, useReceiptPrint, vietQrUrl } from '../components/Receipt.jsx';
+import { ReceiptActions, InvoiceA4, useReceiptPrint, vietQrUrl } from '../components/Receipt.jsx';
 import { useSettings, useUser, isOwner } from '../App.jsx';
 
 const STORE_KEY = 'banhang_carts';
@@ -126,7 +126,7 @@ function LineEditor({ line, owner, onSave, onRemove, onClose }) {
 }
 
 // ---------- Một dòng trong giỏ (vuốt trái để xoá) ----------
-function CartLine({ index, line, owner, onQty, onOpen, onRemove }) {
+function CartLine({ index, line, owner, last, onQty, onOpen, onRemove, onUseLast }) {
   const [dx, setDx] = useState(0);
   const start = useRef(null);
   const disc = lineDiscount(line);
@@ -170,6 +170,12 @@ function CartLine({ index, line, owner, onQty, onOpen, onRemove }) {
             <button onClick={() => onQty(Math.round((line.qty + 1) * 1000) / 1000)}>+</button>
           </div>
         </div>
+        {last && last.price - last.discount !== line.price - disc && (
+          <button className="last-price" onClick={onUseLast}>
+            🕘 Lần trước bán {money(last.price - last.discount)} ({dateOnly(last.date)}) · <u>Dùng giá này</u>
+          </button>
+        )}
+        {last && last.price - last.discount === line.price - disc && <div className="last-price muted">🕘 Đúng giá lần trước ({dateOnly(last.date)})</div>}
         <div className="cart-line-total" onClick={() => onOpen()}>Thành tiền: <b>{money(lineTotal(line))}</b></div>
       </div>
     </div>
@@ -177,7 +183,7 @@ function CartLine({ index, line, owner, onQty, onOpen, onRemove }) {
 }
 
 // ---------- Thanh toán ----------
-function Checkout({ cart, set, t, priceLists, onFinish, onDraft, busy, compact }) {
+function Checkout({ cart, set, t, priceLists, onFinish, onDraft, onQuote, busy, compact }) {
   const settings = useSettings();
   const [pickCustomer, setPickCustomer] = useState(false);
   const [discEdit, setDiscEdit] = useState(false);
@@ -281,7 +287,10 @@ function Checkout({ cart, set, t, priceLists, onFinish, onDraft, busy, compact }
         <button className="btn btn-lg" disabled={busy || !cart.lines.length} onClick={onDraft}>💾 Lưu tạm</button>
         <button className="btn btn-success btn-lg grow" disabled={busy || !cart.lines.length} onClick={() => onFinish(true)}>✅ Hoàn tất & In</button>
       </div>
-      <button className="btn btn-block" disabled={busy || !cart.lines.length} onClick={() => onFinish(false)}>Hoàn tất, không in</button>
+      <div className="row gap">
+        <button className="btn grow" disabled={busy || !cart.lines.length} onClick={() => onFinish(false)}>Hoàn tất, không in</button>
+        <button className="btn" disabled={!cart.lines.length} onClick={onQuote} title="In báo giá, chưa bán, chưa trừ kho">📄 Báo giá</button>
+      </div>
 
       {pickCustomer && (
         <CustomerPicker
@@ -363,10 +372,33 @@ export default function Pos() {
   const [draftCount, setDraftCount] = useState(0);
   const [priceLists, setPriceLists] = useState([]);
   const [run, busy] = useAction();
-  const [printReceipt, printPortal] = useReceiptPrint();
+  const [printReceipt, printPortal, printPage] = useReceiptPrint();
+  // Báo giá A4 từ giỏ hàng: chỉ in, không lưu hoá đơn, không trừ kho
+  const quote = () => {
+    const c = cart.customer;
+    printPage(<InvoiceA4 quote settings={settings} inv={{
+      code: '', created_at: new Date().toLocaleString('sv'), customer_id: c?.id, customer_name: c?.name, customer_code: c?.code,
+      customer_phone: c?.phone, customer_address: c?.address, user_name: user.name, subtotal: t.subtotal, discount: t.discount, total: t.total,
+      items: cart.lines.filter((l) => l.qty > 0).map((l) => ({
+        id: l.key, product_code: l.code, name: l.name, unit: l.unit, qty: l.qty, price: l.price, discount: lineDiscount(l), total: lineTotal(l),
+      })),
+    }} />);
+  };
 
   const cart = carts[Math.min(active, carts.length - 1)];
   const t = totals(cart);
+  // Giá đã bán cho khách này lần trước (theo hàng + đơn vị)
+  const [lastPrices, setLastPrices] = useState({});
+  const lastKey = cart.customer ? `${cart.customer.id}|${[...new Set(cart.lines.map((l) => l.product_id))].sort().join(',')}` : '';
+  useEffect(() => {
+    if (!lastKey) return setLastPrices({});
+    const [cid, ids] = lastKey.split('|');
+    let alive = true;
+    get(`/customers/${cid}/last-prices?ids=${ids}`).then((r) => alive && setLastPrices(r)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [lastKey]);
 
   useEffect(() => {
     try {
@@ -497,6 +529,11 @@ export default function Pos() {
               index={i}
               line={l}
               owner={owner}
+              last={lastPrices[`${l.product_id}:${l.unit_id ?? 0}`]}
+              onUseLast={() => {
+                const lp = lastPrices[`${l.product_id}:${l.unit_id ?? 0}`];
+                setLine(l.key, { price: lp.price, discMode: 'vnd', discValue: lp.discount });
+              }}
               onQty={(qty) => (qty <= 0 ? removeLine(l.key) : setLine(l.key, { qty }))}
               onOpen={() => setEditing(l)}
               onRemove={() => removeLine(l.key)}
@@ -507,7 +544,7 @@ export default function Pos() {
       </div>
 
       <div className="pos-right">
-        <Checkout cart={cart} set={setCheckout} t={t} priceLists={priceLists} onFinish={finish} onDraft={saveDraft} busy={busy} />
+        <Checkout cart={cart} set={setCheckout} t={t} priceLists={priceLists} onFinish={finish} onDraft={saveDraft} onQuote={quote} busy={busy} />
       </div>
 
       <div className="pos-bar">
@@ -520,7 +557,7 @@ export default function Pos() {
 
       {mobilePay && (
         <Modal title="Thanh toán" onClose={() => setMobilePay(false)}>
-          <Checkout cart={cart} set={setCheckout} t={t} priceLists={priceLists} onFinish={finish} onDraft={saveDraft} busy={busy} compact />
+          <Checkout cart={cart} set={setCheckout} t={t} priceLists={priceLists} onFinish={finish} onDraft={saveDraft} onQuote={quote} busy={busy} compact />
         </Modal>
       )}
       {editing && (

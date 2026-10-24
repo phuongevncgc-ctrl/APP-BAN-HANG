@@ -81,3 +81,14 @@ test('combo: chặn bán khi không đủ món bên trong (tắt âm kho)', asyn
   await assert.rejects(post('/invoices', { items: [{ product_id: combo, qty: 1, price: 10 }], payments: [{ method: 'cash', amount: 10 }] }), /Không đủ hàng: "Món A"/);
   await put('/settings', { allow_negative_stock: '1' });
 });
+
+test('giá bán lần trước cho khách theo hàng và đơn vị', async () => {
+  const p = (await post('/products', { name: 'Sơn trắng', unit: 'Lon', price: 100000, stock: 50, units: [{ name: 'Thùng', factor: 4, price: 380000 }] }));
+  const prod = await get(`/products/${p.id}`);
+  const c = await post('/customers', { name: 'Thợ Hai' });
+  await post('/invoices', { customer_id: c.id, items: [{ product_id: p.id, qty: 1, price: 100000, discount: 5000 }], payments: [{ method: 'cash', amount: 95000 }] });
+  await post('/invoices', { customer_id: c.id, items: [{ product_id: p.id, qty: 1, price: 98000 }, { product_id: p.id, unit_id: prod.units[0].id, qty: 1, price: 370000 }], payments: [{ method: 'cash', amount: 468000 }] });
+  const last = await get(`/customers/${c.id}/last-prices?ids=${p.id}`);
+  assert.deepEqual(last[`${p.id}:0`].price, 98000);
+  assert.equal(last[`${p.id}:${prod.units[0].id}`].price, 370000);
+});

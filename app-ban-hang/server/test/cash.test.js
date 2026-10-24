@@ -79,3 +79,20 @@ test('kiểm kho nhiều món: cân lại tồn, ghi lệch', async () => {
   assert.equal(moves[0].ref_code, 'KK000001');
   await assert.rejects(post('/stock-counts', { items: [{ product_id: a, actual_qty: 1 }, { product_id: a, actual_qty: 2 }] }), /trùng/);
 });
+
+test('báo cáo xuất nhập tồn theo kỳ', async () => {
+  const p = (await post('/products', { name: 'Ốc vít', unit: 'Cái', cost: 100, price: 200, stock: 100 })).id;
+  const sup = await post('/suppliers', { name: 'NCC vít' });
+  await post('/purchases', { supplier_id: sup.id, items: [{ product_id: p, qty: 50, cost: 100 }], paid: 5000 });
+  const inv = await post('/invoices', { items: [{ product_id: p, qty: 30, price: 200 }], payments: [{ method: 'cash', amount: 6000 }] });
+  await post('/returns', { invoice_id: inv.id, items: [{ invoice_item_id: inv.items[0].id, qty: 5 }] });
+  await post('/supplier-returns', { supplier_id: sup.id, items: [{ product_id: p, qty: 10, cost: 100 }] });
+  await post('/stock-counts', { items: [{ product_id: p, actual_qty: 110 }] });
+  const rep = await get('/reports/stock?q=oc%20vit');
+  const r = rep.rows.find((x) => x.id === p);
+  assert.deepEqual([r.opening, r.purchase, r.sold, r.returned, r.supplier_return, r.adjust, r.closing], [0, 50, 30, 5, 10, 95, 110]); // hàng tạo hôm nay: tồn ban đầu 100 nằm trong cột cân bằng (100 - 5)
+  const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('sv');
+  const later = (await get(`/reports/stock?from=${tomorrow}&to=${tomorrow}&q=oc%20vit`)).rows.find((x) => x.id === p);
+  assert.equal(later.opening, 110);
+  assert.equal(later.sold, 0);
+});

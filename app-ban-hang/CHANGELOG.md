@@ -1,5 +1,11 @@
 # Nhật ký thay đổi
 
+## 0.3.0
+
+- **Báo cáo xuất nhập tồn** theo kỳ: tồn đầu, nhập, bán, khách trả, trả NCC, kiểm kho, tồn cuối, giá trị tồn. Xuất Excel.
+- **Giá bán lần trước**: chọn khách khi bán, mỗi món hiện giá đã bán cho khách đó lần gần nhất, bấm "Dùng giá này" là áp luôn.
+- **Báo giá A4**: in bảng báo giá từ giỏ hàng cho khách / thợ, chưa bán, chưa trừ kho.
+
 ## 0.2.3
 
 - Đổi tên app thành **PSell**. Dữ liệu giữ nguyên, cập nhật như bình thường.

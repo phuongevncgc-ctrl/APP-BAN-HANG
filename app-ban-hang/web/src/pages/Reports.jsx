@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { get } from '../api.js';
+import { get, downloadUrl } from '../api.js';
 import { money, num, dateOnly, isoDay, METHOD_NAMES } from '../format.js';
-import { DateRange, Loading, useLoad } from '../components/ui.jsx';
+import { DateRange, Loading, useLoad, useDebounced } from '../components/ui.jsx';
 import { go } from '../App.jsx';
 
 function Stat({ label, value, tone, sub, onClick }) {
@@ -37,15 +37,69 @@ function DayBars({ rows }) {
   );
 }
 
+// Xuất nhập tồn theo kỳ, số lượng theo ĐVT gốc
+function StockReport({ range }) {
+  const [q, setQ] = useState('');
+  const dq = useDebounced(q);
+  const qs = `from=${range[0]}&to=${range[1]}&q=${encodeURIComponent(dq)}`;
+  const state = useLoad(() => get(`/reports/stock?${qs}`), [qs]);
+  const cell = (v) => (v ? num(v) : '');
+  return (
+    <>
+      <div className="row gap">
+        <input className="input grow" placeholder="🔍 Tìm hàng" value={q} onChange={(e) => setQ(e.target.value)} />
+        <a className="btn" href={downloadUrl(`/export/stock.xlsx?${qs}`)} download>📤 Excel</a>
+      </div>
+      <Loading state={state}>
+        {(r) => (
+          <>
+            <div className="cards">
+              <Stat label="Tồn đầu kỳ" value={num(r.totals.opening)} />
+              <Stat label="Nhập" value={num(r.totals.purchase)} />
+              <Stat label="Bán ra" value={num(r.totals.sold)} />
+              <Stat label="Tồn cuối kỳ" value={num(r.totals.closing)} sub={`Giá trị ${money(r.totals.value)}`} />
+            </div>
+            <div className="table-scroll">
+              <table className="table stock-table">
+                <thead><tr><th>Hàng hoá</th><th className="r">Đầu kỳ</th><th className="r">Nhập</th><th className="r">Bán</th><th className="r">Khách trả</th><th className="r">Trả NCC</th><th className="r">Cân bằng</th><th className="r">Cuối kỳ</th></tr></thead>
+                <tbody>
+                  {r.rows.length === 0 && <tr><td colSpan={8} className="empty">Không có hàng</td></tr>}
+                  {r.rows.slice(0, 500).map((x) => (
+                    <tr key={x.id}>
+                      <td>{x.name}<small className="muted block">{x.code} · {x.unit}</small></td>
+                      <td className="r">{num(x.opening)}</td><td className="r">{cell(x.purchase)}</td><td className="r">{cell(x.sold)}</td>
+                      <td className="r">{cell(x.returned)}</td><td className="r">{cell(x.supplier_return)}</td><td className="r">{cell(x.adjust)}</td>
+                      <td className={`r ${x.closing < 0 ? 'neg' : ''}`}><b>{num(x.closing)}</b></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {r.rows.length > 500 && <p className="muted small">Màn hình hiện 500 hàng đầu, bấm Excel để xem đủ {r.rows.length} hàng.</p>}
+          </>
+        )}
+      </Loading>
+    </>
+  );
+}
+
 export default function Reports() {
   const today = isoDay(new Date());
   const [range, setRange] = useState([today, today]);
-  const state = useLoad(() => get(`/reports/summary?from=${range[0]}&to=${range[1]}`), [range[0], range[1]]);
+  const [tab, setTab] = useState('summary');
+  const state = useLoad(() => (tab === 'summary' ? get(`/reports/summary?from=${range[0]}&to=${range[1]}`) : Promise.resolve(null)), [range[0], range[1], tab]);
   return (
     <div className="page">
-      <div className="page-head"><h1>Báo cáo</h1></div>
+      <div className="page-head">
+        <h1>Báo cáo</h1>
+        <div className="seg">
+          <button className={tab === 'summary' ? 'on' : ''} onClick={() => setTab('summary')}>Tổng quan</button>
+          <button className={tab === 'stock' ? 'on' : ''} onClick={() => setTab('stock')}>Xuất nhập tồn</button>
+        </div>
+      </div>
       <DateRange from={range[0]} to={range[1]} onChange={(f, t) => setRange([f, t])} />
-      <Loading state={state}>
+      {tab === 'stock' && <StockReport range={range} />}
+      {tab === 'summary' && <Loading state={state}>
         {(r) => (
           <>
             <div className="cards">
@@ -111,7 +165,7 @@ export default function Reports() {
             )}
           </>
         )}
-      </Loading>
+      </Loading>}
     </div>
   );
 }

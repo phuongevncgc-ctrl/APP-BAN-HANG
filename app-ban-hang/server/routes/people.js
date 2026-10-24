@@ -84,6 +84,22 @@ export default function peopleRoutes(db) {
   });
 
   // Thu nợ khách
+  // Giá bán gần nhất cho khách này theo từng hàng + đơn vị: ?ids=1,2,3
+  r.get('/customers/:id/last-prices', (req, res) => {
+    const ids = String(req.query.ids ?? '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 200);
+    if (!ids.length) return res.json({});
+    const rows = db.prepare(`SELECT it.product_id, COALESCE(it.unit_id, 0) AS unit_id, it.price, it.discount, i.created_at, i.code
+      FROM invoice_items it JOIN invoices i ON i.id = it.invoice_id
+      WHERE i.customer_id = ? AND i.status = 'done' AND it.product_id IN (${ids.map(() => '?').join(',')})
+      ORDER BY i.id DESC`).all(Number(req.params.id), ...ids);
+    const out = {};
+    for (const x of rows) {
+      const k = `${x.product_id}:${x.unit_id}`;
+      if (!out[k]) out[k] = { price: x.price, discount: x.discount, date: x.created_at, code: x.code };
+    }
+    res.json(out);
+  });
+
   r.get('/customers/:id/ledger', (req, res) => {
     res.json(customerLedger(db, Number(req.params.id), day(req.query.from, ''), day(req.query.to, '')));
   });

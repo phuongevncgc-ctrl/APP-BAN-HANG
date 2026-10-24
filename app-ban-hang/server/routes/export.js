@@ -5,6 +5,8 @@ import { requireOwner } from '../auth.js';
 import { day } from '../util.js';
 import { customerLedger, supplierLedger } from '../ledger.js';
 import { getSettings } from './admin.js';
+import { stockReport } from '../stockreport.js';
+import { fold } from '../db.js';
 
 const METHOD = { cash: 'Tiền mặt', transfer: 'Chuyển khoản', card: 'Thẻ' };
 const MONEY = '#,##0;[Red]-#,##0';
@@ -250,6 +252,37 @@ export default function exportRoutes(db) {
       totals: { amount: l.totals.amount, paid: l.totals.paid, increase: l.totals.increase, decrease: l.totals.decrease, balance: l.closing },
     });
     await send(res, wb, `CongNoNCC_${l.partner.id}_${stamp()}.xlsx`);
+  });
+
+  // ---------- Xuất nhập tồn ----------
+  const stockArgs = (req) => {
+    const today = new Date().toLocaleDateString('sv');
+    return [day(req.query.from, today), day(req.query.to, today), { q: fold(String(req.query.q ?? '')).slice(0, 100), category: Number(req.query.category) || null }];
+  };
+  r.get('/reports/stock', requireOwner, (req, res) => {
+    const rep = stockReport(db, ...stockArgs(req));
+    // Màn hình chỉ cần hàng có phát sinh hoặc còn tồn
+    res.json({ ...rep, rows: rep.rows.filter((x) => x.opening || x.closing || x.purchase || x.sold || x.returned || x.supplier_return || x.adjust) });
+  });
+  r.get('/export/stock.xlsx', requireOwner, async (req, res) => {
+    const [from, to, opts] = stockArgs(req);
+    const rep = stockReport(db, from, to, opts);
+    const wb = book();
+    addSheet(wb, 'Xuất nhập tồn', [
+      { header: 'Mã hàng', key: 'code', width: 13 },
+      { header: 'Tên hàng', key: 'name', width: 34 },
+      { header: 'ĐVT', key: 'unit', width: 8 },
+      { header: 'Nhóm hàng', key: 'category', width: 16 },
+      { header: 'Tồn đầu kỳ', key: 'opening', qty: true, width: 11 },
+      { header: 'Nhập hàng', key: 'purchase', qty: true, width: 11 },
+      { header: 'Bán ra', key: 'sold', qty: true, width: 11 },
+      { header: 'Khách trả', key: 'returned', qty: true, width: 10 },
+      { header: 'Trả NCC', key: 'supplier_return', qty: true, width: 10 },
+      { header: 'Kiểm kho / cân bằng', key: 'adjust', qty: true, width: 12 },
+      { header: 'Tồn cuối kỳ', key: 'closing', qty: true, width: 11 },
+      { header: 'Giá trị tồn cuối (giá vốn hiện tại)', key: 'value', money: true, width: 16 },
+    ], rep.rows, { title: `XUẤT NHẬP TỒN - ${getSettings(db).shop_name}`, info: [`Từ ${from} đến ${to} · số lượng theo ĐVT gốc`], totals: rep.totals });
+    await send(res, wb, `XuatNhapTon_${from}_${to}.xlsx`);
   });
 
   // ---------- Hoá đơn trong khoảng ngày: danh sách + chi tiết từng món ----------

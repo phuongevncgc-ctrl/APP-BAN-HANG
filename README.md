@@ -18,6 +18,7 @@
 - **Khách hàng & công nợ**: lịch sử mua, hoá đơn còn nợ, nợ lâu nhất bao nhiêu ngày, thu nợ có chiết khấu.
 - **Nhập hàng**: phiếu nhập theo đơn vị bất kỳ, chiết khấu %, giá vốn bình quân, nợ nhà cung cấp.
 - **Kho**: thẻ kho (lịch sử nhập xuất), cân bằng kho, lọc hàng còn / hết / âm kho / sắp hết.
+- **Báo giá A4**, **giá bán lần trước** cho từng khách, **báo cáo xuất nhập tồn**.
 - **Báo cáo**: doanh thu, lợi nhuận, tiền mặt, chuyển khoản, hàng bán chạy, theo nhân viên, theo ngày.
 - **Nhân viên**: mỗi người một tài khoản. Nhân viên không xem được giá vốn, lợi nhuận.
 - **Nhập dữ liệu**: file Excel xuất từ KiotViet (tự gom ĐVT quy đổi), hoặc file `db.json` của app bán hàng cũ.
