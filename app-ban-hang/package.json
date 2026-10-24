@@ -1,6 +1,6 @@
 {
   "name": "app-ban-hang",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Phần mềm bán hàng chạy trên máy nhà (Home Assistant / Docker)",
   "type": "module",

@@ -1,21 +1,26 @@
 import { useState } from 'react';
 import { get, post, downloadUrl } from '../api.js';
 import { money, num, vnd, dateTime, isoDay, METHOD_NAMES } from '../format.js';
-import { DateRange, Loading, Modal, QtyInput, useAction, useLoad, useDebounced, confirmAsk } from '../components/ui.jsx';
+import { DateRange, Loading, Modal, QtyInput, useAction, useLoad, useDebounced, confirmAsk, useToast } from '../components/ui.jsx';
 import { ReceiptActions } from '../components/Receipt.jsx';
 import { useUser, isOwner, go } from '../App.jsx';
 
 function ReturnForm({ inv, onClose, onDone }) {
+  const toast = useToast();
   const [qty, setQty] = useState({});
-  const [method, setMethod] = useState('cash');
+  // Khách còn nợ thì mặc định trừ vào nợ, tránh trả tiền mặt cho hàng khách chưa trả tiền
+  const owes = inv.customer_id && inv.customer_debt > 0;
+  const [method, setMethod] = useState(owes ? 'debt' : 'cash');
   const [note, setNote] = useState('');
   const [run, busy] = useAction();
   const ratio = inv.subtotal > 0 ? inv.total / inv.subtotal : 1;
   const left = (it) => Math.round((it.qty - it.returned_qty) * 1000) / 1000;
-  const estimate = inv.items.reduce((s, it) => s + Math.round((qty[it.id] || 0) * (it.price - it.discount) * ratio), 0);
+  // Cách tính giống máy chủ: đơn giá sau giảm (đã chia giảm giá hoá đơn) làm tròn rồi nhân số lượng
+  const estimate = inv.items.reduce((s, it) => s + Math.round((qty[it.id] || 0) * Math.round((it.price - it.discount) * ratio)), 0);
   const submit = async () => {
     const items = Object.entries(qty).filter(([, q]) => q > 0).map(([id, q]) => ({ invoice_item_id: Number(id), qty: q }));
-    const r = await run(() => post('/returns', { invoice_id: inv.id, items, refund_method: method, note }), 'Đã trả hàng');
+    const r = await run(() => post('/returns', { invoice_id: inv.id, items, refund_method: method, note }));
+    if (r) toast(`Đã trả hàng ${r.code} · ${method === 'debt' ? 'Trừ nợ' : 'Hoàn'} ${vnd(r.total)}`);
     if (r) onDone(r);
   };
   return (
@@ -42,6 +47,8 @@ function ReturnForm({ inv, onClose, onDone }) {
           <button key={k} className={method === k ? 'on' : ''} onClick={() => setMethod(k)}>{l}</button>
         ))}
       </div>
+      {owes && method !== 'debt' && <div className="warn">⚠️ Khách đang nợ {money(inv.customer_debt)}. Thường nên chọn "Trừ vào nợ".</div>}
+      {method === 'debt' && estimate > (inv.customer_debt ?? 0) && <div className="muted small">Số trả lớn hơn số nợ: phần dư thành tiền cửa hàng còn giữ của khách (nợ âm), lần sau khách mua chọn "Ghi nợ" là tự trừ.</div>}
       <input className="input" placeholder="Lý do trả (không bắt buộc)" value={note} onChange={(e) => setNote(e.target.value)} />
     </Modal>
   );

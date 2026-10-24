@@ -1,5 +1,10 @@
 # Nhật ký thay đổi
 
+## 0.2.1
+
+- Trả hàng: khách còn nợ thì mặc định "Trừ vào nợ", cảnh báo nếu chọn hoàn tiền mặt. Số tiền hoàn hiện trên nút tính giống hệt máy chủ.
+- Thêm bài kiểm tra đối chiếu sổ sách sau 300 nghiệp vụ ngẫu nhiên (kho, công nợ, sổ quỹ, báo cáo).
+
 ## 0.2.0
 
 - **Combo hàng hoá**: ghép nhiều món thành một combo. Bán combo thì kho trừ từng món bên trong, trả hàng / huỷ hoá đơn cộng lại đúng công thức lúc bán. Tồn combo tự tính theo số bộ ráp được.
