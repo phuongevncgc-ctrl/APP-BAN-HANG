@@ -92,6 +92,7 @@ export function QtyInput({ value, onChange, ...rest }) {
     <input
       {...rest}
       className={`input ${rest.className ?? ''}`}
+      style={{ '--len': Math.max(2, text.length), ...rest.style }}
       inputMode="decimal"
       value={text}
       onFocus={(e) => e.target.select()}

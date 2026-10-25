@@ -1,5 +1,10 @@
 # Nhật ký thay đổi
 
+## 1.0.0-beta.10
+
+- **Ô số lượng tự rộng ra** khi gõ số 3–4 chữ số (100, 1000, 12,5) — không còn bị mất số.
+- **Màn hình "Đã bán xong":** 4 nút In hoá đơn / In A4 / Gửi Zalo / Đơn mới xếp gọn 2 hàng, chữ nằm trong nút.
+
 ## 1.0.0-beta.9
 
 - **Chữ nhỏ lại** cho cả app (vừa mắt hơn, thấy được nhiều hơn).

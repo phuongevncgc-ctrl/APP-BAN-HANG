@@ -267,7 +267,10 @@ select.input { appearance: auto; }
 .tag-warn { background: var(--warn-bg); color: #8a5300; font-size: 0.75rem; padding: 1px 6px; border-radius: 6px; }
 .qty { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .qty button { width: 38px; height: 38px; border: 0; background: #f2f4f7; font-size: 1.4rem; cursor: pointer; font-weight: 700; }
-.qty .qty-input, .qty-input { width: 52px; min-height: 38px; text-align: center; border: 0; border-radius: 0; font-weight: 700; }
+.qty .qty-input, .qty-input { width: max(52px, calc(var(--len, 2) * 1ch + 16px)); max-width: 110px; min-height: 38px; padding: 0 6px; text-align: center; border: 0; border-radius: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.qty { flex-shrink: 0; }
+.receipt-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.receipt-actions .btn { white-space: nowrap; min-width: 0; padding-left: 8px; padding-right: 8px; justify-content: center; }
 .list-item .qty-input { border: 1px solid var(--line); border-radius: 10px; }
 .clear-btn { align-self: flex-end; }
 

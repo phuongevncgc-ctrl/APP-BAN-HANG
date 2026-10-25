@@ -187,11 +187,11 @@ export function ReceiptActions({ inv, onDone }) {
   };
   return (
     <>
-      <div className="row gap wrap">
-        <button className="btn btn-primary btn-lg grow" onClick={() => printReceipt(inv)}>🖨️ In hoá đơn</button>
-        <button className="btn btn-lg" onClick={() => print(<InvoiceA4 inv={inv} settings={settings} />)}>📄 In A4</button>
-        <button className="btn btn-lg grow" onClick={share}>📤 Gửi Zalo</button>
-        {onDone && <button className="btn btn-lg grow" onClick={onDone}>Đơn mới</button>}
+      <div className="receipt-actions">
+        <button className="btn btn-primary" onClick={() => printReceipt(inv)}>🖨️ In hoá đơn</button>
+        <button className="btn" onClick={() => print(<InvoiceA4 inv={inv} settings={settings} />)}>📄 In A4</button>
+        <button className="btn" onClick={share}>📤 Gửi Zalo</button>
+        {onDone && <button className="btn" onClick={onDone}>🧾 Đơn mới</button>}
       </div>
       {portal}
     </>
