@@ -1,5 +1,9 @@
 # Nhật ký thay đổi
 
+## 0.3.1
+
+- **Gợi ý hàng cần nhập**: trong phiếu nhập bấm "📋 Gợi ý hàng cần nhập", app tính sẵn món nào sắp hết và nên nhập bao nhiêu (theo sức bán 30 ngày gần đây, đủ bán 14 ngày tới, cộng tồn nhỏ nhất). Đã trừ hàng khách trả và hoá đơn huỷ. Lọc được theo nhà cung cấp lần trước nhập. Sửa số lượng, bỏ chọn món không cần rồi bấm thêm vào phiếu.
+
 ## 0.3.0
 
 - **Báo cáo xuất nhập tồn** theo kỳ: tồn đầu, nhập, bán, khách trả, trả NCC, kiểm kho, tồn cuối, giá trị tồn. Xuất Excel.

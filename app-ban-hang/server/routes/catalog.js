@@ -7,6 +7,7 @@ import { tx, nextCode, fold } from '../db.js';
 import { requireOwner, isOwner } from '../auth.js';
 import { moveStock } from './sales.js';
 import { importProducts } from '../importer.js';
+import { reorderSuggest } from '../reorder.js';
 import { bad, notFound, money, str, idOrNull } from '../util.js';
 
 function saveImage(imagesDir, dataUrl) {
@@ -167,6 +168,20 @@ export default function catalogRoutes(db, { imagesDir }) {
     attachUnits([row], listId);
     row.unit_id = unitId;
     res.json(row);
+  });
+
+  // Gợi ý hàng cần nhập, kèm ĐVT quy đổi để thêm thẳng vào phiếu nhập
+  r.get('/products/reorder', (req, res) => {
+    const days = Math.min(Math.max(Math.round(Number(req.query.days) || 30), 1), 365);
+    const cover = Math.min(Math.max(Math.round(Number(req.query.cover) || 14), 1), 365);
+    const list = reorderSuggest(db, { days, cover, supplierId: idOrNull(req.query.supplier) });
+    if (!list.length) return res.json([]);
+    const byId = new Map(list.map((x) => [x.id, x]));
+    const rows = db.prepare(`SELECT ${productFields(req)} FROM products p LEFT JOIN categories c ON c.id = p.category_id
+      WHERE p.id IN (${list.map(() => '?').join(',')})`).all(...list.map((x) => x.id));
+    attachUnits(rows, null);
+    for (const row of rows) Object.assign(row, byId.get(row.id));
+    res.json(rows.sort((a, b) => b.need - a.need || a.name.localeCompare(b.name, 'vi')));
   });
 
   r.get('/products/:id', (req, res) => {

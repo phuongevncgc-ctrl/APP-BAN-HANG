@@ -16,7 +16,7 @@
 - **Thu chi, chốt ca, kiểm kho**: phiếu thu / chi, sổ quỹ, in phiếu chốt ca cuối ngày, phiếu kiểm kho nhiều món.
 - **Xuất Excel**: hàng hoá, hoá đơn, công nợ khách hàng và nhà cung cấp (tổng hợp + sổ chi tiết), in biên bản đối chiếu công nợ.
 - **Khách hàng & công nợ**: lịch sử mua, hoá đơn còn nợ, nợ lâu nhất bao nhiêu ngày, thu nợ có chiết khấu.
-- **Nhập hàng**: phiếu nhập theo đơn vị bất kỳ, chiết khấu %, giá vốn bình quân, nợ nhà cung cấp.
+- **Nhập hàng**: phiếu nhập theo đơn vị bất kỳ, chiết khấu %, giá vốn bình quân, nợ nhà cung cấp, gợi ý hàng cần nhập theo sức bán.
 - **Kho**: thẻ kho (lịch sử nhập xuất), cân bằng kho, lọc hàng còn / hết / âm kho / sắp hết.
 - **Báo giá A4**, **giá bán lần trước** cho từng khách, **báo cáo xuất nhập tồn**.
 - **Báo cáo**: doanh thu, lợi nhuận, tiền mặt, chuyển khoản, hàng bán chạy, theo nhân viên, theo ngày.
