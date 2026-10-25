@@ -1,6 +1,7 @@
 // Nhập dữ liệu từ Excel KiotViet (hàng hoá, khách hàng, nhà cung cấp) hoặc từ file db.json của app bán hàng cũ.
 // Nguyên tắc cập nhật: cột nào không có hoặc để trống trong file thì giữ nguyên dữ liệu đang có trong app.
 import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
 import { nextCode, fold } from './db.js';
 import { moveStock } from './routes/sales.js';
 import { bad } from './util.js';
@@ -42,9 +43,36 @@ function cellValue(v) {
 
 const HEADER_KEYS = ['Mã hàng', 'ma_hang', 'Mã khách hàng', 'Mã nhà cung cấp', 'Mã NCC'];
 
+const MAIN_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+
+// File KiotViet xuất ra ghi thẻ XML có tiền tố (<x:styleSheet>...), thư viện Excel không đọc được.
+// Bỏ tiền tố để thành file Excel chuẩn; file bình thường thì giữ nguyên.
+export async function normalizeXlsx(buffer) {
+  const zip = await JSZip.loadAsync(buffer);
+  let changed = false;
+  for (const name of Object.keys(zip.files)) {
+    if (!/^xl\/.*\.xml$/.test(name)) continue;
+    let xml = await zip.file(name).async('string');
+    // Bảng (table) trong trang tính không cần cho việc nhập, và hay làm thư viện đọc lỗi
+    if (/^xl\/worksheets\/[^/]+\.xml$/.test(name) && /<(\w+:)?tableParts/.test(xml)) {
+      xml = xml.replace(/<(\w+:)?tableParts\b[^>]*\/>|<(\w+:)?tableParts\b[^>]*>[\s\S]*?<\/(\w+:)?tableParts>/, '');
+      zip.file(name, xml);
+      changed = true;
+    }
+    const prefix = xml.match(new RegExp(`xmlns:(\\w+)="${MAIN_NS}"`))?.[1];
+    if (!prefix || new RegExp(`xmlns="${MAIN_NS}"`).test(xml)) continue;
+    const fixed = xml
+      .replace(new RegExp(`<(/?)${prefix}:`, 'g'), '<$1')
+      .replace(`xmlns:${prefix}="${MAIN_NS}"`, `xmlns="${MAIN_NS}"`);
+    zip.file(name, fixed);
+    changed = true;
+  }
+  return changed ? zip.generateAsync({ type: 'nodebuffer' }) : buffer;
+}
+
 async function readXlsx(buffer) {
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(buffer);
+  await wb.xlsx.load(await normalizeXlsx(buffer));
   const ws = wb.worksheets.find((w) => w.rowCount > 0) ?? wb.worksheets[0];
   if (!ws) throw bad('File Excel không có trang tính nào');
   // Dòng tiêu đề thường là dòng 1, nhưng có file có thêm dòng tên báo cáo phía trên
@@ -78,6 +106,7 @@ async function readXlsx(buffer) {
 // priceLists: [{id, name}] — cột nào trùng tên bảng giá trong app thì lấy làm giá theo bảng giá đó.
 export function groupKiotVietRows(rows, priceLists = [], headers = []) {
   const groups = new Map();
+  const combos = [];
   const errors = [];
   const listCols = priceLists
     .map((pl) => ({ id: pl.id, col: headers.find((h) => fold(h) === fold(pl.name)) }))
@@ -91,14 +120,29 @@ export function groupKiotVietRows(rows, priceLists = [], headers = []) {
     return out;
   };
   for (const r of rows) {
-    const code = text(pick(r, ['Mã hàng', 'ma_hang'])).toUpperCase();
+    // Giữ nguyên chữ hoa / thường của mã như trong KiotViet; so khớp thì không phân biệt
+    const code = text(pick(r, ['Mã hàng', 'ma_hang']));
     const name = text(pick(r, ['Tên hàng', 'ten_hang']));
     if (!code) {
       if (name) errors.push({ row: r._row, code, reason: 'Thiếu mã hàng' });
       continue;
     }
     if (/combo/i.test(text(pick(r, ['Loại hàng'])))) {
-      errors.push({ row: r._row, code, reason: 'Combo: tạo combo trong app, không nhập từ file' });
+      // "Hàng thành phần": ma1:2|ma2:1 (mã:số lượng)
+      const parts = text(pick(r, ['Hàng thành phần'])).split('|').map((x) => x.trim()).filter(Boolean).map((x) => {
+        const i = x.lastIndexOf(':');
+        return i > 0 ? { code: x.slice(0, i).trim(), qty: number(x.slice(i + 1)) } : { code: x, qty: 1 };
+      });
+      const group = optText(r, ['Nhóm hàng(3 Cấp)', 'Nhóm hàng', 'nhom_hang']);
+      combos.push({
+        row: r._row, code, name: name || undefined, parts,
+        unit: optText(r, ['ĐVT', 'Đơn vị tính']),
+        barcode: optText(r, ['Mã vạch', 'ma_vach']),
+        category: group === undefined ? undefined : group.split('>>').pop().trim(),
+        price: optNum(r, ['Giá bán', 'gia_ban', 'Bảng giá chung']),
+        active: yes(r, ['Đang kinh doanh']),
+        prices: listPrices(r),
+      });
       continue;
     }
     const rawFactor = pick(r, ['Quy đổi', 'quy_doi']);
@@ -107,12 +151,14 @@ export function groupKiotVietRows(rows, priceLists = [], headers = []) {
       errors.push({ row: r._row, code, reason: 'Hệ số quy đổi không hợp lệ (phải lớn hơn 0)' });
       continue;
     }
-    let baseRef = text(pick(r, ['Mã ĐVT Cơ bản', 'ma_dvt_co_ban'])).toUpperCase();
-    if (!baseRef && factor !== 1) baseRef = text(pick(r, ['Mã HH Liên quan', 'ma_hh_lien_quan'])).toUpperCase();
-    const isUnit = baseRef && baseRef !== code;
+    let baseRef = text(pick(r, ['Mã ĐVT Cơ bản', 'ma_dvt_co_ban']));
+    if (!baseRef && factor !== 1) baseRef = text(pick(r, ['Mã HH Liên quan', 'ma_hh_lien_quan']));
+    const isUnit = baseRef && baseRef.toUpperCase() !== code.toUpperCase();
     const baseCode = isUnit ? baseRef : code;
-    if (!groups.has(baseCode)) groups.set(baseCode, { code: baseCode, base: null, units: [] });
-    const g = groups.get(baseCode);
+    const key = baseCode.toUpperCase();
+    if (!groups.has(key)) groups.set(key, { code: baseCode, base: null, units: [] });
+    const g = groups.get(key);
+    if (!isUnit) g.code = code;
     if (isUnit) {
       g.units.push({
         row: r._row,
@@ -146,7 +192,7 @@ export function groupKiotVietRows(rows, priceLists = [], headers = []) {
       };
     }
   }
-  return { groups: [...groups.values()], errors };
+  return { groups: [...groups.values()], combos, errors };
 }
 
 // Chuyển dữ liệu từ db.json của app cũ sang cùng dạng.
@@ -226,6 +272,7 @@ function saveGroups(db, groups, { updateStock }) {
       if (p) {
         // Chỉ cập nhật cột có trong file
         const set = {};
+        if (b.code && b.code !== p.code) set.code = b.code; // chỉ khác chữ hoa / thường
         if (b.name !== undefined && b.name !== p.name) Object.assign(set, { name: b.name, search: fold(b.name) });
         if (b.unit !== undefined && b.unit !== p.unit) set.unit = b.unit;
         if (b.barcode !== undefined && b.barcode !== p.barcode) set.barcode = b.barcode;
@@ -262,7 +309,7 @@ function saveGroups(db, groups, { updateStock }) {
         const track = b.track_stock === undefined ? 1 : b.track_stock ? 1 : 0;
         const id = Number(db.prepare(`INSERT INTO products (name, search, barcode, category_id, unit, cost, price, min_stock,
           track_stock, active, code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-          b.name, fold(b.name), b.barcode ?? null, categoryId(b.category), b.unit ?? 'Cái', Math.round(b.cost ?? 0), Math.round(b.price ?? 0),
+          b.name, fold(b.name), b.barcode ?? null, categoryId(b.category), b.unit ?? '', Math.round(b.cost ?? 0), Math.round(b.price ?? 0),
           b.min_stock ?? 0, track, b.active === false ? 0 : 1, b.code,
         ).lastInsertRowid);
         if (b.stock && track) moveStock(db, id, b.stock, 'init', null);
@@ -306,6 +353,98 @@ function saveGroups(db, groups, { updateStock }) {
       setListPrices(db, p.id, unitId, u.prices);
       result.units++;
     }
+  }
+  return result;
+}
+
+// Combo từ KiotViet ("Combo - đóng gói"): tạo / cập nhật combo và các món bên trong.
+// Món bên trong là mã ĐVT quy đổi (vd Bì 50 cái) thì quy về đơn vị gốc.
+function saveCombos(db, combos, result) {
+  const findProduct = db.prepare('SELECT * FROM products WHERE code = ?');
+  const findUnit = db.prepare('SELECT product_id, factor FROM product_units WHERE code = ?');
+  const categoryId = (name) => {
+    if (!name) return null;
+    const c = db.prepare('SELECT id FROM categories WHERE name = ?').get(name);
+    return c ? c.id : Number(db.prepare('INSERT INTO categories (name) VALUES (?)').run(name).lastInsertRowid);
+  };
+  result.combos = 0;
+  for (const c of combos) {
+    const fail = (reason) => {
+      result.errors.push({ row: c.row, code: c.code, reason });
+      result.skipped++;
+    };
+    if (!c.parts.length) {
+      fail('Combo không có hàng thành phần');
+      continue;
+    }
+    const items = new Map();
+    let missing = null;
+    for (const part of c.parts) {
+      if (!(part.qty > 0)) {
+        missing = `Số lượng của "${part.code}" không hợp lệ`;
+        break;
+      }
+      const base = findProduct.get(part.code);
+      const unit = base ? null : findUnit.get(part.code);
+      const itemId = base?.id ?? unit?.product_id;
+      if (!itemId || base?.is_combo) {
+        missing = base?.is_combo ? `"${part.code}" là combo, không cho combo trong combo` : `Không có hàng thành phần mã "${part.code}"`;
+        break;
+      }
+      items.set(itemId, (items.get(itemId) ?? 0) + part.qty * (unit?.factor ?? 1));
+    }
+    if (missing) {
+      fail(missing);
+      continue;
+    }
+    let p = findProduct.get(c.code);
+    if (p && !p.is_combo) {
+      fail('Mã này đang là hàng thường trong app, không đổi thành combo');
+      continue;
+    }
+    if (p) {
+      const set = {};
+      if (c.code !== p.code) set.code = c.code;
+      if (c.name !== undefined && c.name !== p.name) Object.assign(set, { name: c.name, search: fold(c.name) });
+      if (c.unit !== undefined && c.unit !== p.unit) set.unit = c.unit;
+      if (c.barcode !== undefined && c.barcode !== p.barcode) set.barcode = c.barcode;
+      if (c.category !== undefined) {
+        const cid = categoryId(c.category);
+        if (cid !== p.category_id) set.category_id = cid;
+      }
+      if (c.price !== undefined && Math.round(c.price) !== p.price) {
+        set.price = Math.round(c.price);
+        if (result.changes.length < 300) result.changes.push({ code: p.code, name: p.name, what: 'Giá bán', from: p.price, to: set.price });
+      }
+      if (c.active !== undefined && (c.active ? 1 : 0) !== p.active) set.active = c.active ? 1 : 0;
+      const old = db.prepare('SELECT item_id, qty FROM combo_items WHERE combo_id = ? ORDER BY item_id').all(p.id);
+      const now = [...items].sort((a, b) => a[0] - b[0]);
+      const partsChanged = old.length !== now.length || old.some((o, i) => o.item_id !== now[i][0] || Math.abs(o.qty - now[i][1]) > 1e-9);
+      const keys = Object.keys(set);
+      if (keys.length) db.prepare(`UPDATE products SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map((k) => set[k]), p.id);
+      if (partsChanged) db.prepare('DELETE FROM combo_items WHERE combo_id = ?').run(p.id);
+      if (keys.length || partsChanged) result.updated++;
+      else result.unchanged++;
+      if (!partsChanged) {
+        setListPrices(db, p.id, 0, c.prices);
+        result.combos++;
+        continue;
+      }
+    } else {
+      if (!c.name) {
+        fail('Thiếu tên hàng');
+        continue;
+      }
+      const id = Number(db.prepare(`INSERT INTO products (code, barcode, name, search, category_id, unit, cost, price, track_stock, active, is_combo)
+        VALUES (?, ?, ?, ?, ?, ?, 0, ?, 0, ?, 1)`).run(
+        c.code, c.barcode ?? null, c.name, fold(c.name), categoryId(c.category), c.unit ?? 'Bộ', Math.round(c.price ?? 0), c.active === false ? 0 : 1,
+      ).lastInsertRowid);
+      p = { id };
+      result.created++;
+    }
+    for (const [itemId, qty] of items) db.prepare('INSERT INTO combo_items (combo_id, item_id, qty) VALUES (?, ?, ?)').run(p.id, itemId, qty);
+    setListPrices(db, p.id, 0, c.prices);
+    result.combos++;
   }
   return result;
 }
@@ -415,7 +554,9 @@ export async function importProducts(db, buffer, { updateStock = true, dryRun = 
     try {
       sheet = await readXlsx(buffer);
     } catch (err) {
-      throw bad(`Không đọc được file Excel: ${err.message}`);
+      if (err.status) throw err;
+      console.error('Đọc file Excel lỗi:', err);
+      throw bad('Không đọc được file Excel. Hãy mở file bằng Excel, bấm Lưu (Save) rồi nhập lại.');
     }
     const { rows, headers } = sheet;
     if (headers.includes('Mã khách hàng') || headers.includes('Tên khách hàng')) {
@@ -428,8 +569,8 @@ export async function importProducts(db, buffer, { updateStock = true, dryRun = 
       throw bad('Không thấy cột "Mã hàng". Hãy xuất file từ KiotViet: Hàng hoá → Xuất file (hoặc Khách hàng / Nhà cung cấp → Xuất file).');
     }
     const priceLists = db.prepare('SELECT id, name FROM price_lists').all();
-    const { groups, errors } = groupKiotVietRows(rows, priceLists, headers);
-    const result = run(db, dryRun, () => saveGroups(db, groups, { updateStock }));
+    const { groups, combos, errors } = groupKiotVietRows(rows, priceLists, headers);
+    const result = run(db, dryRun, () => saveCombos(db, combos, saveGroups(db, groups, { updateStock })));
     result.errors = [...errors, ...result.errors];
     result.skipped += errors.length;
     return { kind: 'excel', total: rows.length, ...result };

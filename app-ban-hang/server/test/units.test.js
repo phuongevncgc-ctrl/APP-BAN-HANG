@@ -249,3 +249,41 @@ test('PSell 1.0: xem trước công nợ, mật khẩu 12 ký tự, hệ số qu
   assert.match(r.errors[0].reason, /Hệ số quy đổi/);
   assert.equal((await get('/products?q=HSO1'))[0].units.length, 0);
 });
+
+test('file KiotViet thật: thẻ XML có tiền tố, có bảng; combo; giữ chữ thường của mã', async () => {
+  const JSZip = (await import('jszip')).default;
+  const raw = await xlsx([
+    ['Loại hàng', 'Nhóm hàng(3 Cấp)', 'Mã hàng', 'Tên hàng', 'Giá bán', 'Giá vốn', 'Tồn kho', 'ĐVT', 'Mã ĐVT Cơ bản', 'Quy đổi', 'Hàng thành phần'],
+    ['Combo - đóng gói', 'Hàng Hóa', 'bccg49', 'Bộ co cùm gai 49', 75000, 51313.17, 0, 'Bộ', '', 1, 'csnv:1|ctg50:2|rcsb:1'],
+    ['Hàng hóa', 'Hàng Hóa', 'csnv', 'Cùm sắt nhỏ', 5000, 3000.5, 100, 'Cái', '', 1, ''],
+    ['Hàng hóa', 'Hàng Hóa', 'ctg50', 'Co tê gai 50', 8000, 6000, -3, 'Cái', '', 1, ''],
+    ['Hàng hóa', 'Hàng Hóa', 'rcs', 'Ron cao su', 1000, 400, 500, 'Cái', '', 1, ''],
+    ['Hàng hóa', 'Hàng Hóa', 'rcsb', 'Ron cao su', 45000, '', 10, 'Bì', 'rcs', 50, ''],
+    ['Combo - đóng gói', 'Hàng Hóa', 'cbloi', 'Combo lỗi', 1, 0, 0, 'Bộ', '', 1, 'khongco:1'],
+  ]);
+  // Làm giống file KiotViet: styles.xml dùng tiền tố x:, trang tính có <tableParts>
+  const zip = await JSZip.loadAsync(raw);
+  const main = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  const styles = await zip.file('xl/styles.xml').async('string');
+  zip.file('xl/styles.xml', styles.replace(/<(\/?)(?![?!])/g, '<$1x:').replace(`xmlns="${main}"`, `xmlns:x="${main}"`));
+  const sheet = await zip.file('xl/worksheets/sheet1.xml').async('string');
+  zip.file('xl/worksheets/sheet1.xml', sheet.replace('</worksheet>',
+    '<tableParts count="1"><tablePart p3:id="Rabc" xmlns:p3="http://schemas.openxmlformats.org/officeDocument/2006/relationships" /></tableParts></worksheet>'));
+  const buf = await zip.generateAsync({ type: 'nodebuffer' });
+
+  const r = await call('POST', '/products/import', null, buf);
+  assert.equal(r.combos, 1);
+  assert.deepEqual(r.errors.map((e) => [e.code, e.reason]), [['cbloi', 'Không có hàng thành phần mã "khongco"']]);
+  const combo = await get('/products/lookup?code=BCCG49');
+  assert.equal(combo.code, 'bccg49', 'giữ nguyên chữ thường như KiotViet');
+  assert.equal(combo.is_combo, 1);
+  // 1 cùm + 2 co tê + 1 bì ron (= 50 cái)
+  const parts = Object.fromEntries((await get(`/products/${combo.id}`)).combo_items.map((c) => [c.code, c.qty]));
+  assert.deepEqual(parts, { csnv: 1, ctg50: 2, rcs: 50 });
+  assert.equal((await get('/products/lookup?code=CTG50')).stock, -3);
+  assert.equal((await get('/products/lookup?code=rcsb')).unit_id > 0, true);
+
+  const again = await call('POST', '/products/import', null, buf);
+  assert.equal(again.created, 0);
+  assert.equal(again.updated, 0, 'nhập lại cùng file không đổi gì');
+});

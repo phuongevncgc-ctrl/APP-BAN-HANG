@@ -13,6 +13,7 @@ function Summary({ r }) {
       <div className="row-between"><span>Có thay đổi</span><b>{num(r.updated)} {what}</b></div>
       {r.unchanged > 0 && <div className="row-between"><span>Giữ nguyên</span><span>{num(r.unchanged)} {what}</span></div>}
       {r.units > 0 && <div className="row-between"><span>Đơn vị quy đổi</span><span>{num(r.units)}</span></div>}
+      {r.combos > 0 && <div className="row-between"><span>Combo (đã gồm trong số trên)</span><span>{num(r.combos)}</span></div>}
       {r.merged > 0 && <div>Gom {r.merged} hàng tách sai vào đúng mặt hàng gốc.</div>}
       {r.customers !== undefined && <div>Thêm {r.customers} khách hàng, {r.suppliers} nhà cung cấp.</div>}
       {r.images > 0 && !r.dryRun && <div className="muted small">Đang tải {r.images} ảnh hàng hoá từ KiotViet về (chạy nền vài phút).</div>}

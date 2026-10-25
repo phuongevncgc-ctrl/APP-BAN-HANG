@@ -1,5 +1,14 @@
 # Nhật ký thay đổi
 
+## 1.0.0-beta.4
+
+Thử với file hàng hoá KiotViet thật của cửa hàng (8.302 dòng): nhập đủ 7.422 hàng, 585 đơn vị quy đổi, 295 combo, không dòng nào lỗi, tổng tồn kho khớp file.
+
+- **Sửa lỗi không đọc được file xuất từ KiotViet** (file KiotViet ghi Excel theo kiểu riêng). Trước đây nhập file thật sẽ báo lỗi.
+- **Nhập combo từ KiotViet** ("Combo - đóng gói") kèm các món bên trong theo cột "Hàng thành phần". Món bên trong là mã đơn vị quy đổi (vd 1 Bì = 50 cái) thì tự quy về đơn vị gốc.
+- Giữ nguyên **chữ hoa / thường của mã hàng** như trong KiotViet (trước đây đổi hết thành chữ hoa). Tìm và quét mã vẫn không phân biệt hoa thường.
+- Hàng không có đơn vị tính trong KiotViet thì để trống, không tự ghi "Cái".
+
 ## 1.0.0-beta.3
 
 - **Mã QR chuyển khoản tạo ngay trong máy** theo chuẩn VietQR (NAPAS), không cần Internet. Mất mạng VNPT / Viettel mà điện thoại vẫn bắt wifi nhà thì vẫn bán, vẫn hiện QR. Dưới mã QR có tên và số tài khoản để khách đối chiếu.
