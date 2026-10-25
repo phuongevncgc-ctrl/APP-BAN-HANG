@@ -1,5 +1,10 @@
 # Nhật ký thay đổi
 
+## 1.0.0-beta.7
+
+- Sửa lỗi **"Failed to fetch" khi bấm "Đồng ý nhập"** trên điện thoại Android: điện thoại không cho đọc file lần thứ hai (lần xem trước đã đọc rồi). Giờ app đọc file một lần ngay khi chọn và dùng lại cho cả xem trước lẫn nhập.
+- Mất mạng giữa chừng thì báo rõ ràng; bấm nhập lại không bị trùng hàng.
+
 ## 1.0.0-beta.6
 
 - **Quên mật khẩu chủ cửa hàng:** vào Home Assistant → add-on PSell → tab Cấu hình, điền "Đặt lại mật khẩu chủ cửa hàng", Lưu rồi Khởi động lại. Tên đăng nhập hiện ở tab Nhật ký. Dữ liệu giữ nguyên.

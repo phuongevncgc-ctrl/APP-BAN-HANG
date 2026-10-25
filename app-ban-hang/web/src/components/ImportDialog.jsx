@@ -57,6 +57,20 @@ function Details({ r }) {
 // Nhập file: chọn file → xem trước sẽ thay đổi gì → đồng ý mới ghi vào app.
 export default function ImportDialog({ onClose, onDone }) {
   const [file, setFile] = useState(null);
+  // Đọc file vào bộ nhớ ngay khi chọn: điện thoại Android không cho đọc lại file lần hai
+  // (xem trước rồi nhập), lần gửi thứ hai sẽ lỗi "Failed to fetch".
+  const [bytes, setBytes] = useState(null);
+  const pick = async (f) => {
+    setFile(f);
+    setBytes(null);
+    if (!f) return;
+    try {
+      setBytes(await f.arrayBuffer());
+    } catch {
+      setFile(null);
+      toast('Không đọc được file. Hãy chọn lại file.', 'error');
+    }
+  };
   const [updateStock, setUpdateStock] = useState(true);
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState(null);
@@ -68,9 +82,9 @@ export default function ImportDialog({ onClose, onDone }) {
       const res = await fetch(`api/products/import?update_stock=${updateStock ? 1 : 0}${dry ? '&dry=1' : ''}`, {
         method: 'POST',
         headers: { authorization: `Bearer ${getToken()}`, 'content-type': 'application/octet-stream' },
-        body: file,
+        body: bytes,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ error: `Máy chủ trả lỗi ${res.status}` }));
       if (!res.ok) throw new Error(data.error);
       if (dry) setPreview(data);
       else {
@@ -78,7 +92,8 @@ export default function ImportDialog({ onClose, onDone }) {
         onDone();
       }
     } catch (err) {
-      toast(err.message || 'Nhập file lỗi', 'error');
+      const network = err instanceof TypeError;
+      toast(network ? 'Mất kết nối tới máy chủ khi gửi file. Kiểm tra mạng rồi bấm lại (nhập lại không bị trùng).' : err.message || 'Nhập file lỗi', 'error');
     } finally {
       setBusy(false);
     }
@@ -110,14 +125,14 @@ export default function ImportDialog({ onClose, onDone }) {
   }
   return (
     <Modal title="Nhập dữ liệu từ file" onClose={onClose}
-      footer={<button className="btn btn-primary btn-lg btn-block" disabled={!file || busy} onClick={() => send(true)}>{busy ? 'Đang đọc file…' : 'Xem trước'}</button>}>
+      footer={<button className="btn btn-primary btn-lg btn-block" disabled={!bytes || busy} onClick={() => send(true)}>{busy ? 'Đang đọc file…' : 'Xem trước'}</button>}>
       <p>Chọn file Excel (.xlsx) xuất từ <b>KiotViet</b>:</p>
       <ul>
         <li><b>Hàng hoá → Xuất file</b>: thêm hàng mới, cập nhật tên, giá, mã vạch, nhóm, ĐVT quy đổi, ảnh. Cột trùng tên bảng giá trong app (vd "Giá sỉ") thì cập nhật luôn bảng giá.</li>
         <li><b>Khách hàng → Xuất file</b> hoặc <b>Nhà cung cấp → Xuất file</b>: thêm khách / NCC kèm số nợ.</li>
       </ul>
       <p className="muted small">Hoặc file <b>db.json</b> của app bán hàng cũ. Nhập lại nhiều lần không bị trùng.</p>
-      <input type="file" className="input" accept=".xlsx,.json" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+      <input type="file" className="input" accept=".xlsx,.json" onChange={(e) => pick(e.target.files?.[0] ?? null)} />
       <label className="check"><input type="checkbox" checked={updateStock} onChange={(e) => setUpdateStock(e.target.checked)} /> <span>Lấy <b>số tồn kho</b> (hàng) / <b>số nợ</b> (khách, NCC) theo file cho dữ liệu đã có</span></label>
       <p className="muted small">Khi chạy song song với KiotViet, nên tick ô này để số tồn và nợ giống KiotViet.</p>
     </Modal>
