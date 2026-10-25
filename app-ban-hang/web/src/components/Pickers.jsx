@@ -52,7 +52,8 @@ export function ProductSearch({ priceListId, onPick, showCost = false, autoFocus
     e.preventDefault();
     const code = q.trim();
     if (!code) return;
-    const exact = results.find((p) => p.barcode === code || p.code === code.toUpperCase());
+    const lc = code.toLowerCase();
+    const exact = results.find((p) => p.barcode?.toLowerCase() === lc || p.code.toLowerCase() === lc);
     if (exact) return pick(exact);
     if (results.length === 1) return pick(results[0]);
     if (await byCode(code)) {
@@ -81,26 +82,34 @@ export function ProductSearch({ priceListId, onPick, showCost = false, autoFocus
       </div>
       {open && results.length > 0 && (
         <div className="psearch-results">
-          {results.map((p) => (
-            <div key={p.id} className="psearch-item">
-              <button className="psearch-main" onClick={() => pick(p)}>
-                {p.image ? <img src={imageUrl(p.image)} alt="" /> : <span className="thumb">📦</span>}
-                <span className="grow">
-                  {p.is_combo ? <span className="badge badge-blue">Combo</span> : null} <b>{p.name}</b> - <b className="unit">{p.unit}</b>
-                  <small className="muted block">
-                    {p.code} · {p.is_combo ? 'Ráp được' : 'Tồn'}: <span className={p.stock <= 0 && (p.track_stock || p.is_combo) ? 'neg' : ''}>{num(p.stock)}</span>
-                    {showCost && p.cost !== undefined && ` · Vốn: ${money(p.cost)}`}
-                  </small>
-                </span>
-                <b className="price">{money(showCost ? p.last_cost || p.cost : p.sell_price)}</b>
-              </button>
-              {p.units.filter((u) => showCost || u.direct_sale).map((u) => (
-                <button key={u.id} className="psearch-unit" onClick={() => pick(p, u.id)}>
-                  + {u.name} <small>({num(u.factor)} {p.unit})</small> <b>{money(showCost ? (p.last_cost || p.cost) * u.factor : u.sell_price)}</b>
+          {results.map((p) => {
+            const units = p.units.filter((u) => showCost || u.direct_sale);
+            const low = p.stock <= 0 && (p.track_stock || p.is_combo);
+            return (
+              <div key={p.id} className="psearch-item">
+                <button className="psearch-main" onClick={() => pick(p)}>
+                  {p.image && <img src={imageUrl(p.image)} alt="" />}
+                  <span className="grow">
+                    <span className="psearch-name">{p.is_combo ? <span className="badge badge-blue">Combo</span> : null} {p.name}{p.unit && <span className="muted"> ({p.unit})</span>}</span>
+                    <small className="muted block">
+                      {p.code} · {p.is_combo ? 'Ráp' : 'Tồn'} <b className={low ? 'neg' : ''}>{num(p.stock)}</b>
+                      {showCost && p.cost !== undefined && ` · Vốn ${money(p.cost)}`}
+                    </small>
+                  </span>
+                  <b className="price">{money(showCost ? p.last_cost || p.cost : p.sell_price)}</b>
                 </button>
-              ))}
-            </div>
-          ))}
+                {units.length > 0 && (
+                  <div className="psearch-units">
+                    {units.map((u) => (
+                      <button key={u.id} className="psearch-unit" onClick={() => pick(p, u.id)}>
+                        {u.name} <small className="muted">×{num(u.factor)}</small> <b>{money(showCost ? (p.last_cost || p.cost) * u.factor : u.sell_price)}</b>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
       {scan && <Scanner continuous={continuousScan} onCode={byCode} onClose={() => setScan(false)} />}

@@ -1,5 +1,11 @@
 # Nhật ký thay đổi
 
+## 1.0.0-beta.8
+
+- **Danh sách tìm hàng gọn như KiotViet:** mỗi hàng 2 dòng (tên + ĐVT, mã + tồn, giá bên phải), đơn vị quy đổi là nút nhỏ ngay dưới, bỏ ô ảnh trống. Màn hình điện thoại thấy được khoảng gấp 3 số hàng so với trước, danh sách không còn bị thanh "Thanh toán" che.
+- Trang Hàng hoá cũng gọn hơn, nút Nhập / Excel / Thêm nhỏ lại.
+- Sửa lỗi máy quét mã vạch + Enter không chọn đúng hàng khi mã hàng là chữ thường (mã từ KiotViet).
+
 ## 1.0.0-beta.7
 
 - Sửa lỗi **"Failed to fetch" khi bấm "Đồng ý nhập"** trên điện thoại Android: điện thoại không cho đọc file lần thứ hai (lần xem trước đã đọc rồi). Giờ app đọc file một lần ngay khi chọn và dùng lại cho cả xem trước lẫn nhập.

@@ -319,9 +319,9 @@ export default function Products({ route }) {
             <div className="row gap wrap">
               {stats.data && <span className="badge badge-blue">{num(stats.data.total)} hàng hoá · tồn {num(stats.data.total_stock)}</span>}
               <span className="grow" />
-              {owner && <button className="btn" onClick={() => setImporting(true)}>📥 Nhập file</button>}
-              {owner && <a className="btn" href={downloadUrl('/export/products.xlsx')} download>📤 Xuất Excel</a>}
-              {owner && <button className="btn btn-primary" onClick={() => go('hang-hoa/moi')}>+ Thêm</button>}
+              {owner && <button className="btn btn-sm" onClick={() => setImporting(true)}>📥 Nhập</button>}
+              {owner && <a className="btn btn-sm" href={downloadUrl('/export/products.xlsx')} download>📤 Excel</a>}
+              {owner && <button className="btn btn-sm btn-primary" onClick={() => go('hang-hoa/moi')}>+ Thêm</button>}
             </div>
             <input className="input" placeholder="🔍 Tên, mã hàng, mã vạch" value={q} onChange={(e) => setQ(e.target.value)} />
             <div className="chips">
@@ -349,10 +349,10 @@ export default function Products({ route }) {
                 {rows.length === 0 && <div className="empty">Không có hàng hoá</div>}
                 {rows.map((p) => (
                   <button key={p.id} className={`list-item product-row ${p.active ? '' : 'faded'}`} onClick={() => go(`hang-hoa/${p.id}`)}>
-                    {p.image ? <img src={imageUrl(p.image)} alt="" /> : <span className="thumb">📦</span>}
+                    {p.image && <img src={imageUrl(p.image)} alt="" />}
                     <span className="grow">
-                      <b>{p.name}</b> ({p.unit}){p.units.length > 0 && <small className="muted"> +{p.units.map((u) => u.name).join(', ')}</small>}
-                      <small className="muted block">{p.code}</small>
+                      <span className="psearch-name">{p.name}{p.unit && <span className="muted"> ({p.unit})</span>}</span>
+                      <small className="muted block">{p.code}{p.units.length > 0 && ` · ${p.units.map((u) => u.name).join(', ')}`}</small>
                     </span>
                     <span className="r">
                       <span className={p.track_stock && p.stock < 0 ? 'neg' : p.track_stock && p.stock <= p.min_stock ? 'warn-text' : ''}>
