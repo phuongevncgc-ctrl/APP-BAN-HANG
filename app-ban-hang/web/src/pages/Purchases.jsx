@@ -257,7 +257,7 @@ export default function Purchases() {
                 {rows.map((s) => (
                   <div key={s.id} className="list-item">
                     <button className="grow text-left" onClick={() => owner && setEditSup(s)}>
-                      <b>{s.name}</b><small className="muted block">{s.phone} {s.address}</small>
+                      <b>{s.name}</b><small className="muted block">{s.code} · {s.phone} {s.address}</small>
                     </button>
                     {s.debt !== 0 && <b className="neg">{money(s.debt)}</b>}
                     {owner && <button className="btn btn-sm" onClick={() => setLedgerSup(s)}>📒 Sổ nợ</button>}

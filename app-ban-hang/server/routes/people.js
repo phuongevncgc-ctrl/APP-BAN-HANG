@@ -149,7 +149,7 @@ export default function peopleRoutes(db) {
   r.post('/suppliers', (req, res) => {
     const name = str(req.body.name, 200);
     if (!name) throw bad('Chưa nhập tên nhà cung cấp');
-    const { lastInsertRowid } = db.prepare('INSERT INTO suppliers (name, phone, address) VALUES (?, ?, ?)')
+    const { lastInsertRowid } = db.prepare(`INSERT INTO suppliers (code, name, phone, address) VALUES ('${nextCode(db, 'suppliers', 'NCC')}', ?, ?, ?)`)
       .run(name, str(req.body.phone, 30), str(req.body.address, 300));
     res.json(db.prepare('SELECT * FROM suppliers WHERE id = ?').get(lastInsertRowid));
   });

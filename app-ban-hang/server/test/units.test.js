@@ -287,3 +287,22 @@ test('file KiotViet thật: thẻ XML có tiền tố, có bảng; combo; giữ 
   assert.equal(again.created, 0);
   assert.equal(again.updated, 0, 'nhập lại cùng file không đổi gì');
 });
+
+test('nhập NCC KiotViet: 2 NCC trùng tên khác mã không bị gộp; mã giữ nguyên', async () => {
+  const buf = await xlsx([
+    ['Mã nhà cung cấp', 'Tên nhà cung cấp', 'Điện thoại', 'Địa chỉ', 'Nợ cần trả hiện tại', 'Mã số thuế'],
+    ['bbsg', 'Bảo Bình', '0983650150', '', 0, ''],
+    ['bb', 'Bảo Bình', '060003289853', '', 1500000, ''],
+    ['nm', 'Nhật Minh', '0915954139', 'BMT', 8036000, '6001614557'],
+  ]);
+  const r = await call('POST', '/products/import', null, buf);
+  assert.equal(r.created, 3);
+  const list = await get('/suppliers');
+  const bb = list.filter((s) => s.name === 'Bảo Bình').map((s) => [s.code, s.debt]).sort();
+  assert.deepEqual(bb, [['bb', 1500000], ['bbsg', 0]]);
+  assert.equal(list.find((s) => s.code === 'nm').tax_code, '6001614557');
+  const again = await call('POST', '/products/import', null, buf);
+  assert.deepEqual([again.created, again.updated, again.unchanged], [0, 0, 3]);
+  // NCC tạo trong app tự có mã NCC...
+  assert.match((await post('/suppliers', { name: 'Đại lý mới' })).code, /^NCC\d{6}$/);
+});

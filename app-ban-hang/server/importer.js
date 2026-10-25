@@ -453,7 +453,7 @@ function saveCombos(db, combos, result) {
 function saveCustomers(db, rows, { updateDebt }) {
   const result = { created: 0, updated: 0, unchanged: 0, skipped: 0, errors: [], changes: [] };
   for (const r of rows) {
-    const code = text(pick(r, ['Mã khách hàng'])).toUpperCase();
+    const code = text(pick(r, ['Mã khách hàng']));
     const name = text(pick(r, ['Tên khách hàng']));
     if (!code && !name) continue;
     if (!name) {
@@ -462,22 +462,26 @@ function saveCustomers(db, rows, { updateDebt }) {
       continue;
     }
     const phone = text(pick(r, ['Điện thoại', 'Số điện thoại'])).replace(/\s/g, '');
-    const address = [text(pick(r, ['Địa chỉ'])), text(pick(r, ['Phường/Xã'])), text(pick(r, ['Khu vực', 'Quận/Huyện']))].filter(Boolean).join(', ');
-    const tax = text(pick(r, ['Mã số thuế']));
+    const address = [text(pick(r, ['Địa chỉ'])), text(pick(r, ['Phường/Xã'])), text(pick(r, ['Khu vực giao hàng', 'Khu vực', 'Quận/Huyện']))].filter(Boolean).join(', ');
+    const tax = text(pick(r, ['Mã số thuế', 'MST (xuất HĐ)', 'MST']));
+    const note = text(pick(r, ['Ghi chú']));
     const debt = optNum(r, ['Nợ cần thu hiện tại', 'Nợ hiện tại', 'Công nợ', 'Nợ cần thu']);
-    const found = (code && db.prepare('SELECT * FROM customers WHERE code = ?').get(code))
-      || (phone && db.prepare('SELECT * FROM customers WHERE phone = ? AND active = 1').get(phone));
+    // Có mã thì chỉ so theo mã (2 khách khác nhau có thể dùng chung số điện thoại); không có mã mới so theo SĐT
+    const found = code
+      ? db.prepare('SELECT * FROM customers WHERE code = ?').get(code)
+      : phone && db.prepare('SELECT * FROM customers WHERE phone = ? AND active = 1').get(phone);
     if (found) {
-      db.prepare(`UPDATE customers SET name = ?, search = ?, phone = COALESCE(NULLIF(?, ''), phone), address = COALESCE(NULLIF(?, ''), address),
-        tax_code = COALESCE(NULLIF(?, ''), tax_code) WHERE id = ?`).run(name, fold(name), phone, address, tax, found.id);
+      db.prepare(`UPDATE customers SET code = ?, name = ?, search = ?, phone = COALESCE(NULLIF(?, ''), phone), address = COALESCE(NULLIF(?, ''), address),
+        tax_code = COALESCE(NULLIF(?, ''), tax_code), note = COALESCE(NULLIF(?, ''), note) WHERE id = ?`)
+        .run(code || found.code, name, fold(name), phone, address, tax, note, found.id);
       if (updateDebt && debt !== undefined && Math.round(debt) !== found.debt) {
         db.prepare('UPDATE customers SET debt = ? WHERE id = ?').run(Math.round(debt), found.id);
         if (result.changes.length < 300) result.changes.push({ code: found.code, name, what: 'Công nợ', from: found.debt, to: Math.round(debt) });
         result.updated++;
       } else result.unchanged++;
     } else {
-      db.prepare('INSERT INTO customers (code, name, search, phone, address, tax_code, debt) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .run(code || nextCode(db, 'customers', 'KH'), name, fold(name), phone, address, tax, Math.round(debt ?? 0));
+      db.prepare('INSERT INTO customers (code, name, search, phone, address, tax_code, note, debt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(code || nextCode(db, 'customers', 'KH'), name, fold(name), phone, address, tax, note, Math.round(debt ?? 0));
       result.created++;
     }
   }
@@ -486,22 +490,33 @@ function saveCustomers(db, rows, { updateDebt }) {
 
 function saveSuppliers(db, rows, { updateDebt }) {
   const result = { created: 0, updated: 0, unchanged: 0, skipped: 0, errors: [], changes: [] };
+  const codes = rows.map((r) => text(pick(r, ['Mã nhà cung cấp', 'Mã NCC']))).filter(Boolean);
   for (const r of rows) {
     const name = text(pick(r, ['Tên nhà cung cấp', 'Tên NCC']));
+    const code = text(pick(r, ['Mã nhà cung cấp', 'Mã NCC']));
     if (!name) continue;
     const phone = text(pick(r, ['Điện thoại', 'Số điện thoại'])).replace(/\s/g, '');
-    const address = text(pick(r, ['Địa chỉ']));
+    const address = [text(pick(r, ['Địa chỉ'])), text(pick(r, ['Phường/Xã'])), text(pick(r, ['Khu vực']))].filter(Boolean).join(', ');
+    const tax = text(pick(r, ['Mã số thuế']));
+    const note = text(pick(r, ['Ghi chú']));
     const debt = optNum(r, ['Nợ cần trả hiện tại', 'Nợ hiện tại', 'Công nợ', 'Nợ cần trả']);
-    const found = db.prepare('SELECT * FROM suppliers WHERE name = ?').get(name);
+    // Có mã thì so theo mã (KiotViet có thể có 2 NCC trùng tên); NCC tạo trong app chưa có mã KiotViet thì so theo tên
+    const found = code
+      ? db.prepare('SELECT * FROM suppliers WHERE code = ?').get(code)
+        ?? db.prepare("SELECT * FROM suppliers WHERE name = ? AND code NOT IN (SELECT value FROM json_each(?))").get(name, JSON.stringify(codes))
+      : db.prepare('SELECT * FROM suppliers WHERE name = ?').get(name);
     if (found) {
-      db.prepare("UPDATE suppliers SET phone = COALESCE(NULLIF(?, ''), phone), address = COALESCE(NULLIF(?, ''), address) WHERE id = ?").run(phone, address, found.id);
+      db.prepare(`UPDATE suppliers SET code = ?, name = ?, phone = COALESCE(NULLIF(?, ''), phone), address = COALESCE(NULLIF(?, ''), address),
+        tax_code = COALESCE(NULLIF(?, ''), tax_code), note = COALESCE(NULLIF(?, ''), note) WHERE id = ?`)
+        .run(code || found.code, name, phone, address, tax, note, found.id);
       if (updateDebt && debt !== undefined && Math.round(debt) !== found.debt) {
         db.prepare('UPDATE suppliers SET debt = ? WHERE id = ?').run(Math.round(debt), found.id);
         if (result.changes.length < 300) result.changes.push({ code: '', name, what: 'Công nợ', from: found.debt, to: Math.round(debt) });
         result.updated++;
       } else result.unchanged++;
     } else {
-      db.prepare('INSERT INTO suppliers (name, phone, address, debt) VALUES (?, ?, ?, ?)').run(name, phone, address, Math.round(debt ?? 0));
+      db.prepare('INSERT INTO suppliers (code, name, phone, address, tax_code, note, debt) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(code || nextCode(db, 'suppliers', 'NCC'), name, phone, address, tax, note, Math.round(debt ?? 0));
       result.created++;
     }
   }
@@ -526,8 +541,8 @@ function saveOldAppPartners(db, data) {
   for (const s of data.suppliers ?? []) {
     const name = text(s.name);
     if (!name || db.prepare('SELECT 1 FROM suppliers WHERE name = ?').get(name)) continue;
-    db.prepare('INSERT INTO suppliers (name, phone, address, debt) VALUES (?, ?, ?, ?)')
-      .run(name, text(s.phone), text(s.address), Math.round(number(s.debt)));
+    db.prepare('INSERT INTO suppliers (code, name, phone, address, debt) VALUES (?, ?, ?, ?, ?)')
+      .run(nextCode(db, 'suppliers', 'NCC'), name, text(s.phone), text(s.address), Math.round(number(s.debt)));
     suppliers++;
   }
   return { customers, suppliers };

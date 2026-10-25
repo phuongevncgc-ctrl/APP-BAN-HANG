@@ -1,5 +1,14 @@
 # Nhật ký thay đổi
 
+## 1.0.0-beta.5
+
+Thử với file Khách hàng (1.356 khách) và Nhà cung cấp (78 NCC) thật của cửa hàng: nhập đủ, không lỗi, tổng nợ khớp file.
+
+- **Sửa lỗi gộp nhầm nhà cung cấp trùng tên.** KiotViet có 2 NCC cùng tên "Bảo Bình" khác mã. Trước đây app so theo tên nên gộp làm một, mất một NCC. Giờ NCC có **mã** riêng như KiotViet, nhập lại so theo mã. NCC tạo trong app tự có mã NCC000001...
+- Sửa lỗi có thể gộp nhầm 2 khách dùng chung số điện thoại: có mã khách thì chỉ so theo mã.
+- Giữ nguyên chữ hoa / thường của mã khách, mã NCC như KiotViet.
+- Nhập thêm mã số thuế (cột "MST (xuất HĐ)"), ghi chú, khu vực giao hàng.
+
 ## 1.0.0-beta.4
 
 Thử với file hàng hoá KiotViet thật của cửa hàng (8.302 dòng): nhập đủ 7.422 hàng, 585 đơn vị quy đổi, 295 combo, không dòng nào lỗi, tổng tồn kho khớp file.

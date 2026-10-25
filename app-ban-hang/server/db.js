@@ -327,6 +327,15 @@ const SCHEMA = [
   CREATE INDEX stock_moves_created ON stock_moves(created_at);
   INSERT OR IGNORE INTO settings (key, value) VALUES ('notify', '{}');
   `,
+  // v4: mã nhà cung cấp (để nhập lại từ KiotViet không nhầm 2 NCC trùng tên), mã số thuế, ghi chú
+  `
+  ALTER TABLE suppliers ADD COLUMN code TEXT COLLATE NOCASE;
+  ALTER TABLE suppliers ADD COLUMN tax_code TEXT NOT NULL DEFAULT '';
+  ALTER TABLE suppliers ADD COLUMN note TEXT NOT NULL DEFAULT '';
+  UPDATE suppliers SET code = 'NCC' || printf('%06d', id);
+  CREATE UNIQUE INDEX suppliers_code ON suppliers(code);
+  CREATE INDEX customers_phone ON customers(phone);
+  `,
 ];
 
 export function openDb(file) {
