@@ -13,3 +13,8 @@ createRoot(document.getElementById('root')).render(
 if ('serviceWorker' in navigator && window.isSecureContext && !import.meta.env.DEV) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
+
+// Đang gõ chữ / số (bàn phím điện thoại mở) thì ẩn thanh menu dưới cho rộng chỗ
+const typingField = (el) => (el?.tagName === 'INPUT' && !['checkbox', 'radio', 'file', 'button', 'submit'].includes(el.type)) || el?.tagName === 'TEXTAREA';
+document.addEventListener('focusin', (e) => document.body.classList.toggle('typing', typingField(e.target)));
+document.addEventListener('focusout', () => setTimeout(() => document.body.classList.toggle('typing', typingField(document.activeElement)), 50));

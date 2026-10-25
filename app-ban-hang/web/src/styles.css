@@ -10,8 +10,8 @@
   --danger: #d12f2f;
   --warn-bg: #fff4dc;
   --radius: 12px;
-  --tap: 48px;
-  font-size: 17px;
+  --tap: 44px;
+  font-size: 15px;
   color-scheme: light;
 }
 
@@ -170,7 +170,7 @@ select.input { appearance: auto; }
 }
 .bottombar a, .bottombar button {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  min-height: 62px; font-size: 0.78rem; color: var(--muted); background: none; border: 0; cursor: pointer;
+  min-height: 54px; font-size: 0.75rem; color: var(--muted); background: none; border: 0; cursor: pointer;
 }
 .bottombar .active { color: var(--primary); font-weight: 700; }
 .nav-icon { font-size: 1.35rem; line-height: 1.2; }
@@ -255,29 +255,28 @@ select.input { appearance: auto; }
 .psearch-units { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 10px 7px; }
 .psearch-unit { background: #f1f5fb; border: 1px solid var(--line); border-radius: 14px; padding: 3px 10px; font-size: 0.85rem; cursor: pointer; color: inherit; }
 
-.cart { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.cart { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
 .cart-line-wrap { position: relative; border-radius: var(--radius); overflow: hidden; background: var(--card); }
 .cart-line-del { position: absolute; right: 0; top: 0; bottom: 0; width: 90px; background: var(--danger); color: #fff; border: 0; font-weight: 700; cursor: pointer; }
-.cart-line { position: relative; background: #fff; padding: 10px 12px; transition: transform 0.15s; }
+.cart-line { position: relative; background: #fff; padding: 7px 10px; transition: transform 0.15s; }
 .cart-line-top { cursor: pointer; }
-.cart-line-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
+.cart-line-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 3px; }
 .cart-price { cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.cart-line-total { text-align: right; color: var(--muted); cursor: pointer; }
-.cart-line-total b { color: var(--text); font-size: 1.05rem; }
+.cart-line-total { text-align: right; cursor: pointer; min-width: 80px; font-weight: 700; }
 .tag-disc { background: #fde4e4; color: var(--danger); font-size: 0.8rem; padding: 1px 6px; border-radius: 6px; font-weight: 700; }
 .tag-warn { background: var(--warn-bg); color: #8a5300; font-size: 0.75rem; padding: 1px 6px; border-radius: 6px; }
 .qty { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.qty button { width: 46px; height: 46px; border: 0; background: #f2f4f7; font-size: 1.4rem; cursor: pointer; font-weight: 700; }
-.qty .qty-input, .qty-input { width: 64px; min-height: 46px; text-align: center; border: 0; border-radius: 0; font-weight: 700; }
+.qty button { width: 38px; height: 38px; border: 0; background: #f2f4f7; font-size: 1.4rem; cursor: pointer; font-weight: 700; }
+.qty .qty-input, .qty-input { width: 52px; min-height: 38px; text-align: center; border: 0; border-radius: 0; font-weight: 700; }
 .list-item .qty-input { border: 1px solid var(--line); border-radius: 10px; }
 .clear-btn { align-self: flex-end; }
 
 .pos-bar {
-  position: fixed; left: 0; right: 0; bottom: calc(62px + env(safe-area-inset-bottom)); z-index: 19;
+  position: fixed; left: 0; right: 0; bottom: calc(54px + env(safe-area-inset-bottom)); z-index: 19;
   display: flex; align-items: center; gap: 10px; background: #fff; padding: 8px 12px; border-top: 1px solid var(--line);
   box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
 }
-.pos-bar-total { font-size: 1.5rem; font-weight: 800; color: var(--primary); font-variant-numeric: tabular-nums; }
+.pos-bar-total { font-size: 1.35rem; font-weight: 800; color: var(--primary); font-variant-numeric: tabular-nums; }
 .pos-page .cart { padding-bottom: 80px; }
 @media (min-width: 900px) { .pos-page .cart { padding-bottom: 0; } }
 
@@ -358,3 +357,9 @@ details summary { cursor: pointer; font-weight: 600; min-height: 32px; }
 .stock-table td:first-child { min-width: 160px; }
 .stock-table td, .stock-table th { white-space: nowrap; }
 .stock-table td:first-child { white-space: normal; }
+
+/* Đang gõ trên điện thoại (bàn phím mở): ẩn thanh menu dưới cho rộng chỗ */
+@media (max-width: 899px) {
+  body.typing .bottombar { display: none; }
+  body.typing .pos-bar { bottom: 0; }
+}

@@ -169,6 +169,7 @@ function CartLine({ index, line, owner, last, onQty, onOpen, onRemove, onUseLast
             <QtyInput className="qty-input" value={line.qty} onChange={onQty} />
             <button onClick={() => onQty(Math.round((line.qty + 1) * 1000) / 1000)}>+</button>
           </div>
+          <div className="cart-line-total" onClick={() => onOpen()}>{money(lineTotal(line))}</div>
         </div>
         {last && last.price - last.discount !== line.price - disc && (
           <button className="last-price" onClick={onUseLast}>
@@ -176,7 +177,6 @@ function CartLine({ index, line, owner, last, onQty, onOpen, onRemove, onUseLast
           </button>
         )}
         {last && last.price - last.discount === line.price - disc && <div className="last-price muted">🕘 Đúng giá lần trước ({dateOnly(last.date)})</div>}
-        <div className="cart-line-total" onClick={() => onOpen()}>Thành tiền: <b>{money(lineTotal(line))}</b></div>
       </div>
     </div>
   );

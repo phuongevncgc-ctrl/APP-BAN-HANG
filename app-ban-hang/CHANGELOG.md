@@ -1,5 +1,11 @@
 # Nhật ký thay đổi
 
+## 1.0.0-beta.9
+
+- **Chữ nhỏ lại** cho cả app (vừa mắt hơn, thấy được nhiều hơn).
+- **Giỏ hàng gọn:** mỗi món 2 dòng — tên + ĐVT; giá · số lượng · thành tiền trên cùng một dòng. Nút +/− nhỏ lại.
+- **Đang gõ trên điện thoại thì ẩn thanh menu dưới** (Bán hàng, Hoá đơn, Hàng hoá...) cho rộng chỗ; gõ xong tự hiện lại.
+
 ## 1.0.0-beta.8
 
 - **Danh sách tìm hàng gọn như KiotViet:** mỗi hàng 2 dòng (tên + ĐVT, mã + tồn, giá bên phải), đơn vị quy đổi là nút nhỏ ngay dưới, bỏ ô ảnh trống. Màn hình điện thoại thấy được khoảng gấp 3 số hàng so với trước, danh sách không còn bị thanh "Thanh toán" che.
