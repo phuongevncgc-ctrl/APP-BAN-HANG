@@ -34,7 +34,7 @@ export function createApp(db, { dataDir, webDir }) {
     if (!needSetup()) throw bad('Đã cài đặt rồi');
     const username = str(req.body.username, 50).toLowerCase();
     if (!/^[a-z0-9_.]{2,}$/.test(username)) throw bad('Tên đăng nhập chỉ gồm chữ không dấu và số, ít nhất 2 ký tự');
-    if (String(req.body.password ?? '').length < 4) throw bad('Mật khẩu ít nhất 4 ký tự');
+    if (String(req.body.password ?? '').length < 12) throw bad('Mật khẩu ít nhất 12 ký tự');
     const { lastInsertRowid } = db.prepare("INSERT INTO users (username, name, pass_hash, role) VALUES (?, ?, ?, 'owner')")
       .run(username, str(req.body.name, 100) || 'Chủ cửa hàng', hashPassword(req.body.password));
     if (str(req.body.shop_name)) db.prepare("UPDATE settings SET value = ? WHERE key = 'shop_name'").run(str(req.body.shop_name, 200));
@@ -57,7 +57,7 @@ export function createApp(db, { dataDir, webDir }) {
   api.put('/me/password', (req, res) => {
     const u = db.prepare('SELECT pass_hash FROM users WHERE id = ?').get(req.user.id);
     if (!checkPassword(req.body.old_password ?? '', u.pass_hash)) throw bad('Mật khẩu cũ không đúng');
-    if (String(req.body.password ?? '').length < 4) throw bad('Mật khẩu mới ít nhất 4 ký tự');
+    if (String(req.body.password ?? '').length < 12) throw bad('Mật khẩu mới ít nhất 12 ký tự');
     db.prepare('UPDATE users SET pass_hash = ? WHERE id = ?').run(hashPassword(req.body.password), req.user.id);
     res.json({ ok: true });
   });
@@ -86,7 +86,7 @@ export function createApp(db, { dataDir, webDir }) {
     if (err instanceof HttpError) return res.status(err.status).json({ error: err.message });
     if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Dữ liệu gửi lên quá lớn' });
     console.error(err);
-    res.status(500).json({ error: 'Lỗi máy chủ: ' + err.message });
+    res.status(500).json({ error: 'Lỗi máy chủ. Vui lòng kiểm tra nhật ký hoặc liên hệ quản trị.' });
   });
 
   return app;

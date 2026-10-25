@@ -63,7 +63,7 @@ function Setup({ onDone }) {
       <Field label="Tên đăng nhập" hint="Chữ không dấu, viết liền, vd: chuphuong">
         <input className="input" autoCapitalize="none" value={f.username} onChange={(e) => setF({ ...f, username: e.target.value })} />
       </Field>
-      <Field label="Mật khẩu"><input className="input" type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></Field>
+      <Field label="Mật khẩu (ít nhất 12 ký tự)"><input className="input" type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></Field>
       <button className="btn btn-primary btn-lg btn-block" disabled={busy}>Bắt đầu</button>
     </form>
   );

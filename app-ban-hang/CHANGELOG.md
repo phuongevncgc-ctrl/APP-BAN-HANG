@@ -1,5 +1,14 @@
 # Nhật ký thay đổi
 
+## 1.0.0-beta.1
+
+Bản thử nghiệm 1.0 (chú Phương viết, bác kiểm tra và bổ sung). Dữ liệu giữ nguyên.
+
+- **Công nợ ngay lúc bán**: chọn khách khi thanh toán sẽ thấy nợ trước hoá đơn, nợ phát sinh và tổng nợ dự kiến sau bán. Số nợ cũ được lấy lại từ máy chủ mỗi lần mở, nên giỏ hàng để từ hôm trước vẫn đúng.
+- **Mật khẩu mới ít nhất 12 ký tự** (cài đặt lần đầu, thêm nhân viên, đổi mật khẩu). Mật khẩu đang dùng vẫn đăng nhập bình thường.
+- Nhập KiotViet: hệ số quy đổi bằng 0 hoặc âm thì báo lỗi đúng dòng, không tự đổi thành 1.
+- Lỗi máy chủ không còn hiện chi tiết kỹ thuật lên màn hình (vẫn ghi trong nhật ký add-on).
+
 ## 0.3.0
 
 - **Báo cáo xuất nhập tồn** theo kỳ: tồn đầu, nhập, bán, khách trả, trả NCC, kiểm kho, tồn cuối, giá trị tồn. Xuất Excel.

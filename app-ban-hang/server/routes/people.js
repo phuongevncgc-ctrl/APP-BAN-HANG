@@ -83,6 +83,21 @@ export default function peopleRoutes(db) {
     res.json({ ok: true });
   });
 
+  // PSell 1.0 Beta: xem trước công nợ ngay tại POS, không ghi dữ liệu.
+  // Tiền thanh toán hóa đơn mới không được tự ý trừ nợ cũ.
+  r.get('/customers/:id/debt-preview', (req, res) => {
+    const customer = db.prepare('SELECT id, code, name, debt FROM customers WHERE id = ? AND active = 1')
+      .get(Number(req.params.id));
+    if (!customer) throw notFound('Không tìm thấy khách hàng');
+    const invoiceTotal = money(req.query.total, 'Tổng tiền hóa đơn');
+    const invoicePaid = money(req.query.paid, 'Tiền thanh toán hóa đơn');
+    if (invoicePaid > invoiceTotal) throw bad('Tiền thanh toán vượt tổng hóa đơn; cần tách tiền thối');
+    const newDebt = invoiceTotal - invoicePaid;
+    res.json({ customer, old_debt: customer.debt, invoice_total: invoiceTotal,
+      invoice_paid: invoicePaid, new_debt: newDebt, projected_debt: customer.debt + newDebt,
+      note: 'Số liệu xem trước, sẽ đối chiếu lại sau khi lưu giao dịch.' });
+  });
+
   // Thu nợ khách
   // Giá bán gần nhất cho khách này theo từng hàng + đơn vị: ?ids=1,2,3
   r.get('/customers/:id/last-prices', (req, res) => {
@@ -169,7 +184,7 @@ export default function peopleRoutes(db) {
     const username = str(req.body.username, 50).toLowerCase();
     const name = str(req.body.name, 100) || username;
     if (!/^[a-z0-9_.]{2,}$/.test(username)) throw bad('Tên đăng nhập chỉ gồm chữ không dấu và số, ít nhất 2 ký tự');
-    if (String(req.body.password ?? '').length < 4) throw bad('Mật khẩu ít nhất 4 ký tự');
+    if (String(req.body.password ?? '').length < 12) throw bad('Mật khẩu ít nhất 12 ký tự');
     if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(username)) throw bad('Tên đăng nhập đã có');
     const role = req.body.role === 'owner' ? 'owner' : 'staff';
     const { lastInsertRowid } = db.prepare('INSERT INTO users (username, name, pass_hash, role) VALUES (?, ?, ?, ?)')
@@ -189,7 +204,7 @@ export default function peopleRoutes(db) {
     tx(db, () => {
       db.prepare('UPDATE users SET name = ?, role = ?, active = ? WHERE id = ?').run(str(req.body.name, 100) || u.name, role, active, id);
       if (req.body.password) {
-        if (String(req.body.password).length < 4) throw bad('Mật khẩu ít nhất 4 ký tự');
+        if (String(req.body.password).length < 12) throw bad('Mật khẩu ít nhất 12 ký tự');
         db.prepare('UPDATE users SET pass_hash = ? WHERE id = ?').run(hashPassword(req.body.password), id);
       }
       if (!active || req.body.password) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(id);

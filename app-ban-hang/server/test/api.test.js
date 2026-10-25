@@ -42,11 +42,11 @@ let pA, pB, cust, wholesale;
 
 test('cài đặt lần đầu và đăng nhập', async () => {
   assert.equal((await get('/status')).needSetup, true);
-  token = (await post('/setup', { username: 'chu', password: '1234', shop_name: 'Tạp hoá Phương' })).token;
+  token = (await post('/setup', { username: 'chu', password: 'matkhau-1234', shop_name: 'Tạp hoá Phương' })).token;
   assert.equal((await get('/status')).user.role, 'owner');
-  await assert.rejects(post('/setup', { username: 'x', password: '1234' }), /Đã cài đặt/);
-  await post('/users', { username: 'nv1', name: 'Lan', password: '1111' });
-  staffToken = (await post('/login', { username: 'NV1', password: '1111' }, null)).token;
+  await assert.rejects(post('/setup', { username: 'x', password: 'matkhau-1234' }), /Đã cài đặt/);
+  await post('/users', { username: 'nv1', name: 'Lan', password: 'nhanvien-1111' });
+  staffToken = (await post('/login', { username: 'NV1', password: 'nhanvien-1111' }, null)).token;
   await assert.rejects(post('/login', { username: 'nv1', password: 'sai' }, null), /Sai/);
 });
 

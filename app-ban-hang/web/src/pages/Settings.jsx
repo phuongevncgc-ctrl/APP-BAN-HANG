@@ -197,7 +197,7 @@ function Users() {
           footer={<button className="btn btn-primary btn-lg btn-block" disabled={busy} onClick={save}>Lưu</button>}>
           <Field label="Tên"><input className="input" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
           <Field label="Tên đăng nhập"><input className="input" autoCapitalize="none" disabled={!!edit.id} value={edit.username} onChange={(e) => setEdit({ ...edit, username: e.target.value })} /></Field>
-          <Field label={edit.id ? 'Mật khẩu mới (bỏ trống nếu không đổi)' : 'Mật khẩu'}><input className="input" type="password" value={edit.password} onChange={(e) => setEdit({ ...edit, password: e.target.value })} /></Field>
+          <Field label={edit.id ? 'Mật khẩu mới (bỏ trống nếu không đổi, ít nhất 12 ký tự)' : 'Mật khẩu (ít nhất 12 ký tự)'}><input className="input" type="password" value={edit.password} onChange={(e) => setEdit({ ...edit, password: e.target.value })} /></Field>
           <Field label="Quyền">
             <div className="seg">
               <button className={edit.role === 'staff' ? 'on' : ''} onClick={() => setEdit({ ...edit, role: 'staff' })}>Nhân viên</button>
@@ -260,7 +260,7 @@ function Account({ reloadSettings }) {
         </div>
       )}
       <Field label="Mật khẩu cũ"><input className="input" type="password" value={f.old_password} onChange={(e) => setF({ ...f, old_password: e.target.value })} /></Field>
-      <Field label="Mật khẩu mới"><input className="input" type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></Field>
+      <Field label="Mật khẩu mới (ít nhất 12 ký tự)"><input className="input" type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></Field>
       <div className="row gap">
         <button className="btn grow" disabled={busy || !f.password} onClick={async () => (await run(() => put('/me/password', f), 'Đã đổi mật khẩu')) && setF({ old_password: '', password: '' })}>Đổi mật khẩu</button>
         <button className="btn btn-danger" onClick={logout}>Đăng xuất</button>

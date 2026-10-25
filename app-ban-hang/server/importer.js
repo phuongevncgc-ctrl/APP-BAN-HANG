@@ -101,7 +101,12 @@ export function groupKiotVietRows(rows, priceLists = [], headers = []) {
       errors.push({ row: r._row, code, reason: 'Combo: tạo combo trong app, không nhập từ file' });
       continue;
     }
-    const factor = number(pick(r, ['Quy đổi', 'quy_doi'])) || 1;
+    const rawFactor = pick(r, ['Quy đổi', 'quy_doi']);
+    const factor = text(rawFactor) === '' ? 1 : number(rawFactor);
+    if (!Number.isFinite(factor) || factor <= 0) {
+      errors.push({ row: r._row, code, reason: 'Hệ số quy đổi không hợp lệ (phải lớn hơn 0)' });
+      continue;
+    }
     let baseRef = text(pick(r, ['Mã ĐVT Cơ bản', 'ma_dvt_co_ban'])).toUpperCase();
     if (!baseRef && factor !== 1) baseRef = text(pick(r, ['Mã HH Liên quan', 'ma_hh_lien_quan'])).toUpperCase();
     const isUnit = baseRef && baseRef !== code;

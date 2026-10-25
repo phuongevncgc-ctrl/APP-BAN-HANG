@@ -28,7 +28,7 @@ before(async () => {
   server = createApp(openDb(':memory:'), { dataDir }).listen(0);
   await new Promise((r) => server.once('listening', r));
   base = `http://127.0.0.1:${server.address().port}/api`;
-  token = (await post('/setup', { username: 'chu', password: '1234' })).token;
+  token = (await post('/setup', { username: 'chu', password: 'matkhau-1234' })).token;
   // Máy in giả: nhận dữ liệu qua cổng TCP
   fake = net.createServer((sock) => {
     const chunks = [];

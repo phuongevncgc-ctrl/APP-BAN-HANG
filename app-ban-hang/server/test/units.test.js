@@ -28,7 +28,7 @@ before(async () => {
   server = createApp(openDb(':memory:'), { dataDir }).listen(0);
   await new Promise((r) => server.once('listening', r));
   base = `http://127.0.0.1:${server.address().port}/api`;
-  token = (await post('/setup', { username: 'chu', password: '1234' })).token;
+  token = (await post('/setup', { username: 'chu', password: 'matkhau-1234' })).token;
 });
 after(() => {
   server.close();
@@ -225,4 +225,27 @@ test('tuổi nợ khách và thu nợ có chiết khấu', async () => {
   assert.equal(d.debt, 30000);
   assert.deepEqual(d.debt_invoices.map((x) => x.owing), [30000]);
   assert.equal(d.max_debt_age, 0);
+});
+
+test('PSell 1.0: xem trước công nợ, mật khẩu 12 ký tự, hệ số quy đổi sai', async () => {
+  const c = (await get('/customers?q=Chú Năm'))[0];
+  const d = await get(`/customers/${c.id}/debt-preview?total=100000&paid=40000`);
+  assert.deepEqual([d.old_debt, d.new_debt, d.projected_debt], [30000, 60000, 90000]);
+  assert.equal((await get(`/customers/${c.id}`)).debt, 30000, 'xem trước không ghi sổ');
+  await assert.rejects(get(`/customers/${c.id}/debt-preview?total=100&paid=200`), /vượt tổng/);
+
+  await assert.rejects(post('/users', { username: 'nv9', password: '12345678901' }), /12 ký tự/);
+  await post('/users', { username: 'nv9', password: '123456789012' });
+  await assert.rejects(put('/me/password', { old_password: 'matkhau-1234', password: 'ngan' }), /12 ký tự/);
+
+  const buf = await xlsx([
+    ['Mã hàng', 'Tên hàng', 'ĐVT', 'Mã ĐVT Cơ bản', 'Quy đổi', 'Giá bán'],
+    ['HSO1', 'Ống thử', 'Cây', '', 1, 10000],
+    ['HSO1C', 'Ống thử', 'Thùng', 'HSO1', 0, 90000],
+    ['HSO1T', 'Ống thử', 'Tá', 'HSO1', -3, 90000],
+  ]);
+  const r = await call('POST', '/products/import', null, buf);
+  assert.deepEqual(r.errors.map((e) => e.code), ['HSO1C', 'HSO1T']);
+  assert.match(r.errors[0].reason, /Hệ số quy đổi/);
+  assert.equal((await get('/products?q=HSO1'))[0].units.length, 0);
 });

@@ -199,6 +199,16 @@ function Checkout({ cart, set, t, priceLists, onFinish, onDraft, onQuote, busy, 
     }
     return xs.slice(0, 5);
   }, [t.total]);
+  // Giỏ hàng lưu trong máy có thể cũ: lấy lại số nợ hiện tại của khách từ máy chủ
+  const customerId = cart.customer?.id;
+  useEffect(() => {
+    if (!customerId) return;
+    let live = true;
+    get(`/customers/${customerId}/debt-preview?total=0&paid=0`).then((d) => {
+      if (live && cart.customer?.id === customerId && d.old_debt !== cart.customer.debt) set({ customer: { ...cart.customer, debt: d.old_debt } });
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [customerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className={`checkout ${compact ? 'compact' : ''}`}>
@@ -279,6 +289,20 @@ function Checkout({ cart, set, t, priceLists, onFinish, onDraft, onQuote, busy, 
         {t.change > 0 && <div className="row-between big pos"><span>Tiền thối lại</span><b>{money(t.change)}</b></div>}
         {t.debt > 0 && <div className="row-between big neg"><span>Còn nợ</span><b>{money(t.debt)}</b></div>}
       </div>
+      {cart.customer && (() => {
+        const oldDebt = Number(cart.customer.debt) || 0;
+        const newDebt = t.debt;
+        const projectedDebt = oldDebt + newDebt;
+        return (
+          <div className="sumbox debt-overview" aria-live="polite">
+            <div className="row-between"><strong>📒 CÔNG NỢ KHÁCH HÀNG</strong><span className="muted">{cart.customer.name}</span></div>
+            <div className="row-between"><span>Nợ trước hóa đơn</span><b>{money(oldDebt)}</b></div>
+            <div className="row-between"><span>Phát sinh hóa đơn này</span><b className={newDebt > 0 ? 'neg' : 'pos'}>{money(newDebt)}</b></div>
+            <div className="row-between big"><strong>Dự kiến tổng nợ sau bán</strong><b className={projectedDebt > 0 ? 'neg' : 'pos'}>{money(projectedDebt)}</b></div>
+            <small className="muted">Số dư dự kiến. Chỉ ghi vào sổ khi hoàn tất hóa đơn thành công; tiền trả dư không tự trừ nợ cũ.</small>
+          </div>
+        );
+      })()}
       {t.debt > 0 && !cart.customer && <div className="warn">Khách trả thiếu: hãy chọn khách để ghi nợ.</div>}
 
       <input className="input" placeholder="Ghi chú" value={cart.note} onChange={(e) => set({ note: e.target.value })} />
