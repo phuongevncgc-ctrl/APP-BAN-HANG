@@ -1,5 +1,9 @@
 # Nhật ký thay đổi
 
+## 1.0.0-beta.3
+
+- **Mã QR chuyển khoản tạo ngay trong máy** theo chuẩn VietQR (NAPAS), không cần Internet. Mất mạng VNPT / Viettel mà điện thoại vẫn bắt wifi nhà thì vẫn bán, vẫn hiện QR. Dưới mã QR có tên và số tài khoản để khách đối chiếu.
+
 ## 1.0.0-beta.2
 
 Chạy tốt với kho 20.000 mặt hàng và 1.500 khách (đã thử: tìm hàng dưới 0,02 giây, nhập file 20.000 hàng khoảng 3 giây).

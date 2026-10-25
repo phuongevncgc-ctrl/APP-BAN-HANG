@@ -4,11 +4,11 @@ import { money, num, dateTime, METHOD_NAMES, moneyToWords } from '../format.js';
 import { useSettings } from '../App.jsx';
 import { useToast } from './ui.jsx';
 import { printReceiptIp } from '../printing.js';
+import { vietQrImage } from '../vietqr.js';
 
 export function vietQrUrl(settings, amount, info) {
   if (!settings.bank_bin || !settings.bank_account) return null;
-  const q = new URLSearchParams({ amount: String(amount), addInfo: info, accountName: settings.bank_holder ?? '' });
-  return `https://img.vietqr.io/image/${settings.bank_bin}-${settings.bank_account}-compact2.png?${q}`;
+  return vietQrImage({ bin: settings.bank_bin, account: settings.bank_account, amount, info });
 }
 
 export function ReceiptBody({ inv, settings }) {

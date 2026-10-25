@@ -279,6 +279,7 @@ function Checkout({ cart, set, t, priceLists, onFinish, onDraft, onQuote, busy, 
         <div className="qr">
           <div className="muted">QR CHUYỂN KHOẢN · {vnd(transferAmount)}</div>
           <img src={qr} alt="Mã QR chuyển khoản" />
+          {settings.bank_holder && <div className="muted small">{settings.bank_holder} · {settings.bank_account}</div>}
           <button className="btn btn-sm" onClick={() => speak(`Đã nhận ${moneyToWords(transferAmount).replace(/^./, (c) => c.toLowerCase())}`)}>🔊 Đã nhận tiền - đọc to</button>
         </div>
       )}
