@@ -79,6 +79,10 @@ test('xuất hàng hoá rồi nhập lại không thay đổi gì', async () => 
   const wb = await xlsx('/export/products.xlsx');
   const ws = wb.worksheets[0];
   const head = values(ws, 1);
+  // Dòng tiêu đề cố định, cột tiền có định dạng số, có lọc
+  assert.equal(ws.views[0].state, 'frozen');
+  assert.equal(ws.getRow(2).getCell(head.indexOf('Giá bán') + 1).numFmt, '#,##0;[Red]-#,##0');
+  assert.ok(ws.autoFilter);
   const rows = [];
   ws.eachRow((row, n) => n > 1 && rows.push(Object.fromEntries(head.map((h, i) => [h, row.values[i + 1]]))));
   const cay = rows.find((r) => r['ĐVT'] === 'Cây');

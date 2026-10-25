@@ -1,5 +1,6 @@
 // Xuất file Excel: hàng hoá (nhập lại được), công nợ khách / nhà cung cấp, hoá đơn.
 import { Router } from 'express';
+import { PassThrough } from 'node:stream';
 import ExcelJS from 'exceljs';
 import { requireOwner } from '../auth.js';
 import { day } from '../util.js';
@@ -13,14 +14,15 @@ const MONEY = '#,##0;[Red]-#,##0';
 const QTY = '#,##0.###;[Red]-#,##0.###';
 
 // Thêm một trang tính: cột [{header, key, width, money, qty}], dòng là object.
+// Ghi theo kiểu luồng (từng dòng) để xuất 20.000 hàng vẫn nhanh và ít tốn bộ nhớ.
 function addSheet(wb, name, columns, rows, { title, info = [], totals } = {}) {
-  const ws = wb.addWorksheet(name);
-  let start = 1;
+  const start = title ? 3 + info.length : 1;
+  const ws = wb.addWorksheet(name, { views: [{ state: 'frozen', ySplit: start }] });
+  ws.columns = columns.map((c) => ({ width: c.width ?? 14, style: c.money ? { numFmt: MONEY } : c.qty ? { numFmt: QTY } : {} }));
   if (title) {
     ws.getCell(1, 1).value = title;
     ws.getCell(1, 1).font = { bold: true, size: 14 };
     info.forEach((line, i) => (ws.getCell(2 + i, 1).value = line));
-    start = 3 + info.length;
   }
   const header = ws.getRow(start);
   columns.forEach((c, i) => {
@@ -29,29 +31,32 @@ function addSheet(wb, name, columns, rows, { title, info = [], totals } = {}) {
     cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
     cell.alignment = { vertical: 'middle', wrapText: true };
-    ws.getColumn(i + 1).width = c.width ?? 14;
-    if (c.money) ws.getColumn(i + 1).numFmt = MONEY;
-    if (c.qty) ws.getColumn(i + 1).numFmt = QTY;
   });
-  for (const r of rows) ws.addRow(columns.map((c) => r[c.key] ?? null));
+  if (rows.length) ws.autoFilter = { from: { row: start, column: 1 }, to: { row: start, column: columns.length } };
+  for (const r of rows) ws.addRow(columns.map((c) => r[c.key] ?? null)).commit();
   if (totals) {
     const row = ws.addRow(columns.map((c, i) => (i === 0 ? 'Tổng cộng' : totals[c.key] ?? null)));
     row.font = { bold: true };
   }
-  ws.views = [{ state: 'frozen', ySplit: start }];
-  if (rows.length) ws.autoFilter = { from: { row: start, column: 1 }, to: { row: start, column: columns.length } };
+  ws.commit();
   return ws;
 }
 
 async function send(res, wb, filename) {
-  const buf = await wb.xlsx.writeBuffer();
+  await wb.commit();
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
-  res.send(Buffer.from(buf));
+  res.send(Buffer.concat(wb.chunks));
 }
 
 const stamp = () => new Date().toLocaleDateString('sv').replaceAll('-', '');
-const book = () => Object.assign(new ExcelJS.Workbook(), { creator: 'PSell' });
+function book() {
+  const stream = new PassThrough();
+  const chunks = [];
+  stream.on('data', (c) => chunks.push(c));
+  const wb = new ExcelJS.stream.xlsx.WorkbookWriter({ stream, useStyles: true, useSharedStrings: false, zip: { zlib: { level: 1 } } });
+  return Object.assign(wb, { creator: 'PSell', chunks });
+}
 
 const LEDGER_COLUMNS = [
   { header: 'Thời gian', key: 'created_at', width: 18 },
@@ -117,9 +122,12 @@ export default function exportRoutes(db) {
       { header: 'Được bán trực tiếp', key: 'direct', width: 9 },
       { header: 'Thành phần combo', key: 'parts', width: 40 },
     ];
+    const group = (xs, key) => xs.reduce((m, x) => m.set(x[key], [...(m.get(x[key]) ?? []), x]), new Map());
+    const unitsOf = group(units, 'product_id');
+    const partsOf = group(comboParts, 'combo_id');
     const rows = [];
     for (const p of products) {
-      const parts = comboParts.filter((x) => x.combo_id === p.id);
+      const parts = partsOf.get(p.id) ?? [];
       const cost = p.is_combo ? Math.round(parts.reduce((s, x) => s + x.cost * x.qty, 0)) : Math.round(p.cost);
       const stock = p.is_combo
         ? (parts.length ? Math.max(0, Math.min(...parts.map((x) => Math.floor(x.stock / x.qty)))) : 0)
@@ -135,7 +143,7 @@ export default function exportRoutes(db) {
         unit: p.unit, base_code: '', factor: 1,
         parts: parts.map((x) => `${x.qty} x ${x.code} ${x.name}`).join('; '),
       });
-      units.filter((u) => u.product_id === p.id).forEach((u, i) => {
+      (unitsOf.get(p.id) ?? []).forEach((u, i) => {
         rows.push({
           ...base,
           ...Object.fromEntries(lists.map((l) => [`pl${l.id}`, priceOf.get(`${l.id}:${p.id}:${u.id}`) ?? null])),
@@ -296,8 +304,10 @@ export default function exportRoutes(db) {
       WHERE date(i.created_at) BETWEEN ? AND ? ORDER BY i.id`).all(from, to);
     const pays = db.prepare(`SELECT ref_id, method, SUM(amount) AS amount FROM payments
       WHERE kind = 'sale' AND ref_id IN (SELECT id FROM invoices WHERE date(created_at) BETWEEN ? AND ?) GROUP BY ref_id, method`).all(from, to);
+    const paid = new Map();
+    for (const p of pays) paid.set(p.ref_id, { ...paid.get(p.ref_id), [p.method]: p.amount });
     const rows = invoices.map((i) => {
-      const my = Object.fromEntries(pays.filter((p) => p.ref_id === i.id).map((p) => [p.method, p.amount]));
+      const my = paid.get(i.id) ?? {};
       return {
         ...i, status_name: i.status === 'done' ? 'Hoàn thành' : 'Đã huỷ', customer: i.customer_name ?? 'Khách lẻ',
         cash: my.cash || null, transfer: my.transfer || null, card: my.card || null, returned: i.returned || null, debt: i.debt || null,

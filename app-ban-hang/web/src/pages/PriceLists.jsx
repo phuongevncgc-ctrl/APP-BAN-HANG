@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { get, post, put, del } from '../api.js';
 import { money } from '../format.js';
 import { Field, Loading, Modal, MoneyInput, useAction, useLoad, useDebounced, confirmAsk } from '../components/ui.jsx';
@@ -6,7 +6,9 @@ import { Field, Loading, Modal, MoneyInput, useAction, useLoad, useDebounced, co
 function PriceListEditor({ list, onClose, onChanged }) {
   const [q, setQ] = useState('');
   const dq = useDebounced(q);
-  const items = useLoad(() => get(`/price-lists/${list.id}/items?q=${encodeURIComponent(dq)}`), [list.id, dq]);
+  const [limit, setLimit] = useState(300);
+  useEffect(() => setLimit(300), [dq]);
+  const items = useLoad(() => get(`/price-lists/${list.id}/items?q=${encodeURIComponent(dq)}&limit=${limit}`), [list.id, dq, limit]);
   const [changes, setChanges] = useState({});
   const [name, setName] = useState(list.name);
   const [run, busy] = useAction();
@@ -65,6 +67,11 @@ function PriceListEditor({ list, onClose, onChanged }) {
                 })}
               </tbody>
             </table>
+            {rows.length >= limit && (
+              <button className="btn btn-block" disabled={items.loading} onClick={() => setLimit(limit + 300)}>
+                {items.loading ? 'Đang tải…' : `Đang hiện ${rows.length} dòng · Xem thêm 300 (hoặc gõ tên để tìm nhanh)`}
+              </button>
+            )}
           </div>
         )}
       </Loading>

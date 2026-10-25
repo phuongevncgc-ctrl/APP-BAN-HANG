@@ -1,9 +1,12 @@
 // Báo cáo, cài đặt, sao lưu.
-import { Router } from 'express';
+import express, { Router } from 'express';
+import { DatabaseSync } from 'node:sqlite';
+import { openDb } from '../db.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { requireOwner } from '../auth.js';
-import { str, day } from '../util.js';
+import { str, day, bad } from '../util.js';
+import { readNotify, saveNotify, notifyServices, sendDaily } from '../notify.js';
 
 const SETTING_KEYS = ['shop_name', 'shop_address', 'shop_phone', 'receipt_footer', 'receipt_width', 'bank_bin', 'bank_account', 'bank_holder', 'allow_negative_stock'];
 
@@ -85,6 +88,63 @@ export function backup(db, backupDir, keep = 30) {
   return file;
 }
 
+// Khôi phục dữ liệu từ một file sao lưu: kiểm tra file, sao lưu dữ liệu hiện tại, rồi chép toàn bộ bảng.
+// Giữ phiên đăng nhập của người đang khôi phục nếu tài khoản đó vẫn có trong bản sao lưu.
+export function restore(db, file, backupDir, keepSession) {
+  const tmp = path.join(backupDir, 'khoi-phuc-tam.db');
+  fs.copyFileSync(file, tmp);
+  for (const ext of ['-wal', '-shm']) fs.rmSync(tmp + ext, { force: true });
+  try {
+    let src;
+    try {
+      src = new DatabaseSync(tmp);
+      const ok = src.prepare('PRAGMA integrity_check').get();
+      if (Object.values(ok)[0] !== 'ok') throw new Error();
+      if (!src.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'products'").get()) throw new Error();
+      if (src.prepare('PRAGMA user_version').get().user_version > db.prepare('PRAGMA user_version').get().user_version) {
+        throw bad('File sao lưu của bản PSell mới hơn. Hãy cập nhật app trước khi khôi phục.');
+      }
+    } catch (err) {
+      if (err.status) throw err;
+      throw bad('File không phải bản sao lưu PSell hoặc đã bị hỏng');
+    } finally {
+      src?.close();
+    }
+    openDb(tmp).close(); // nâng cấu trúc bản cũ lên bản hiện tại
+    const before = backup(db, backupDir);
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != 'sessions'").all().map((t) => t.name);
+    db.exec('PRAGMA foreign_keys = OFF');
+    db.prepare('ATTACH DATABASE ? AS src').run(tmp);
+    try {
+      db.exec('BEGIN');
+      try {
+        for (const t of tables) {
+          const cols = db.prepare(`PRAGMA main.table_info("${t}")`).all().map((c) => c.name);
+          const have = new Set(db.prepare(`PRAGMA src.table_info("${t}")`).all().map((c) => c.name));
+          db.exec(`DELETE FROM main."${t}"`);
+          if (!have.size) continue;
+          const list = cols.filter((c) => have.has(c)).map((c) => `"${c}"`).join(', ');
+          db.exec(`INSERT INTO main."${t}" (${list}) SELECT ${list} FROM src."${t}"`);
+        }
+        // Chỉ giữ phiên của người đang khôi phục, gắn lại vào tài khoản chủ cùng tên trong bản sao lưu
+        const owner = db.prepare("SELECT id FROM users WHERE active = 1 AND role = 'owner' AND username = ?").get(keepSession.username);
+        db.prepare('DELETE FROM sessions WHERE token != ? OR ? IS NULL').run(keepSession.token, owner?.id ?? null);
+        if (owner) db.prepare('UPDATE sessions SET user_id = ? WHERE token = ?').run(owner.id, keepSession.token);
+        db.exec('COMMIT');
+      } catch (err) {
+        db.exec('ROLLBACK');
+        throw err;
+      }
+    } finally {
+      db.exec('DETACH DATABASE src');
+      db.exec('PRAGMA foreign_keys = ON');
+    }
+    return path.basename(before);
+  } finally {
+    for (const ext of ['', '-wal', '-shm']) fs.rmSync(tmp + ext, { force: true });
+  }
+}
+
 export default function adminRoutes(db, { backupDir }) {
   const r = Router();
 
@@ -112,6 +172,37 @@ export default function adminRoutes(db, { backupDir }) {
     });
   });
 
+  // Báo cáo cuối ngày gửi về điện thoại qua Home Assistant
+  r.get('/notify', requireOwner, async (_req, res) => {
+    let services = [];
+    let error = null;
+    try {
+      services = await notifyServices();
+    } catch (err) {
+      error = err.message;
+    }
+    res.json({ ...readNotify(db), available: services, error });
+  });
+
+  r.put('/notify', requireOwner, (req, res) => {
+    const time = String(req.body.time ?? '21:00');
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw bad('Giờ gửi không hợp lệ');
+    const services = (Array.isArray(req.body.services) ? req.body.services : []).map((s) => String(s)).filter((s) => /^[a-z0-9_]+$/.test(s));
+    const cfg = { ...readNotify(db), enabled: !!req.body.enabled, services, time };
+    saveNotify(db, cfg);
+    res.json(cfg);
+  });
+
+  // Gửi thử ngay báo cáo hôm nay
+  r.post('/notify/test', requireOwner, async (req, res) => {
+    const services = Array.isArray(req.body.services) && req.body.services.length ? req.body.services : readNotify(db).services;
+    try {
+      res.json(await sendDaily(db, new Date().toLocaleDateString('sv'), services));
+    } catch (err) {
+      throw bad(err.message);
+    }
+  });
+
   r.get('/backups', requireOwner, (_req, res) => {
     fs.mkdirSync(backupDir, { recursive: true });
     res.json(fs.readdirSync(backupDir).filter((f) => f.endsWith('.db')).sort().reverse()
@@ -126,5 +217,28 @@ export default function adminRoutes(db, { backupDir }) {
     res.download(path.join(backupDir, name));
   });
 
+  // Khôi phục từ bản sao lưu có sẵn trên máy
+  r.post('/backups/:name/restore', requireOwner, (req, res) => {
+    const name = path.basename(req.params.name);
+    const file = path.join(backupDir, name);
+    if (!/^banhang-.*\.db$/.test(name) || !fs.existsSync(file)) throw bad('Không có bản sao lưu này');
+    res.json({ ok: true, before: restore(db, file, backupDir, keep(req)) });
+  });
+
+  // Khôi phục từ file .db tải lên (vd bản đã tải về USB)
+  r.post('/backups/restore', requireOwner, express.raw({ type: () => true, limit: '500mb' }), (req, res) => {
+    if (!req.body?.length) throw bad('Chưa chọn file');
+    fs.mkdirSync(backupDir, { recursive: true });
+    const file = path.join(backupDir, 'tai-len-tam.db');
+    fs.writeFileSync(file, req.body);
+    try {
+      res.json({ ok: true, before: restore(db, file, backupDir, keep(req)) });
+    } finally {
+      fs.rmSync(file, { force: true });
+    }
+  });
+
   return r;
 }
+
+const keep = (req) => ({ token: req.token, username: req.user.username });

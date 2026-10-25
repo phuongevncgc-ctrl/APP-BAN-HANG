@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { get, post, put, del, downloadUrl } from '../api.js';
 import Ledger from '../components/Ledger.jsx';
 import ImportDialog from '../components/ImportDialog.jsx';
-import { money, vnd, dateTime, dateOnly, METHOD_NAMES } from '../format.js';
+import { money, num, vnd, dateTime, dateOnly, METHOD_NAMES } from '../format.js';
 import { Field, Loading, Modal, MoneyInput, useAction, useLoad, useDebounced, confirmAsk } from '../components/ui.jsx';
 import { useUser, isOwner, go } from '../App.jsx';
 
@@ -139,6 +139,8 @@ function CustomerDetail({ id, priceLists, onClose, onChanged }) {
   );
 }
 
+const PAGE = 300;
+
 export default function Customers({ route }) {
   const owner = isOwner(useUser());
   const [q, setQ] = useState('');
@@ -146,7 +148,10 @@ export default function Customers({ route }) {
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
   const dq = useDebounced(q);
-  const list = useLoad(() => get(`/customers?q=${encodeURIComponent(dq)}&debt=${debtOnly ? 1 : 0}`), [dq, debtOnly]);
+  const [limit, setLimit] = useState(PAGE);
+  useEffect(() => setLimit(PAGE), [dq, debtOnly]);
+  const list = useLoad(() => get(`/customers?q=${encodeURIComponent(dq)}&debt=${debtOnly ? 1 : 0}&limit=${limit}`), [dq, debtOnly, limit]);
+  const stats = useLoad(() => get('/customers/stats'), [list.data]);
   const pls = useLoad(() => get('/price-lists'), []);
   const openId = route[1] ? Number(route[1]) : null;
   return (
@@ -167,7 +172,9 @@ export default function Customers({ route }) {
       <Loading state={list}>
         {(rows) => (
           <>
-            {debtOnly && <div className="summary-line">Tổng khách nợ: <b className="neg">{vnd(rows.reduce((s, c) => s + Math.max(c.debt, 0), 0))}</b></div>}
+            {stats.data && (
+              <div className="summary-line">{num(stats.data.total)} khách · {num(stats.data.owing)} khách đang nợ, tổng nợ: <b className="neg">{vnd(stats.data.debt_total)}</b></div>
+            )}
             <div className="list">
               {rows.length === 0 && <div className="empty">Không có khách hàng</div>}
               {rows.map((c) => (
@@ -179,6 +186,11 @@ export default function Customers({ route }) {
                   {c.debt !== 0 && <b className={c.debt > 0 ? 'neg' : 'pos'}>{money(c.debt)}</b>}
                 </button>
               ))}
+              {rows.length >= limit && (
+                <button className="btn btn-block" disabled={list.loading} onClick={() => setLimit(limit + PAGE)}>
+                  {list.loading ? 'Đang tải…' : `Đang hiện ${num(rows.length)} khách · Xem thêm ${PAGE}`}
+                </button>
+              )}
             </div>
           </>
         )}

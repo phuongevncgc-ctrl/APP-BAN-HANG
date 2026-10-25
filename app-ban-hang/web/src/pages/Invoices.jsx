@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { get, post, downloadUrl } from '../api.js';
 import { money, num, vnd, dateTime, isoDay, METHOD_NAMES } from '../format.js';
 import { DateRange, Loading, Modal, QtyInput, useAction, useLoad, useDebounced, confirmAsk, useToast } from '../components/ui.jsx';
@@ -135,7 +135,11 @@ export default function Invoices({ route }) {
   const [q, setQ] = useState('');
   const dq = useDebounced(q);
   const openId = route[1] ? Number(route[1]) : null;
-  const invoices = useLoad(() => get(`/invoices?from=${range[0]}&to=${range[1]}&q=${encodeURIComponent(dq)}`), [range[0], range[1], dq]);
+  const [limit, setLimit] = useState(500);
+  useEffect(() => setLimit(500), [range[0], range[1], dq]);
+  const filter = `from=${range[0]}&to=${range[1]}&q=${encodeURIComponent(dq)}`;
+  const invoices = useLoad(() => get(`/invoices?${filter}&limit=${limit}`), [filter, limit]);
+  const summary = useLoad(() => get(`/invoices/summary?${filter}`), [filter, invoices.data]);
   const returns = useLoad(() => (tab === 'returns' ? get(`/returns?from=${range[0]}&to=${range[1]}`) : Promise.resolve([])), [tab, range[0], range[1]]);
 
   return (
@@ -157,9 +161,9 @@ export default function Invoices({ route }) {
           <Loading state={invoices}>
             {(rows) => (
               <>
-                <div className="summary-line">
-                  {rows.filter((r) => r.status === 'done').length} hoá đơn · Tổng {vnd(rows.filter((r) => r.status === 'done').reduce((s, r) => s + r.total - r.returned, 0))}
-                </div>
+                {summary.data && (
+                  <div className="summary-line">{num(summary.data.done)} hoá đơn · Tổng {vnd(summary.data.net)}</div>
+                )}
                 <div className="list">
                   {rows.length === 0 && <div className="empty">Không có hoá đơn</div>}
                   {rows.map((r) => (
@@ -175,6 +179,11 @@ export default function Invoices({ route }) {
                       </span>
                     </button>
                   ))}
+                  {rows.length >= limit && (
+                    <button className="btn btn-block" disabled={invoices.loading} onClick={() => setLimit(limit + 500)}>
+                      {invoices.loading ? 'Đang tải…' : `Đang hiện ${num(rows.length)} hoá đơn · Xem thêm 500`}
+                    </button>
+                  )}
                 </div>
               </>
             )}

@@ -290,21 +290,37 @@ export default function salesRoutes(db) {
 
   r.post('/invoices', (req, res) => res.json(createInvoice(db, req.user, req.body)));
 
-  r.get('/invoices', (req, res) => {
+  // Lọc hoá đơn theo ngày + từ khoá (mã HĐ, tên / SĐT khách)
+  const invoiceFilter = (req) => {
     const today = new Date().toLocaleDateString('sv');
-    const from = day(req.query.from, today);
-    const to = day(req.query.to, today);
     const q = str(req.query.q, 50);
-    const rows = db.prepare(`SELECT i.id, i.code, i.created_at, i.total, i.paid, i.debt, i.status,
-        c.name AS customer_name, u.name AS user_name,
-        (SELECT COALESCE(SUM(total),0) FROM returns r WHERE r.invoice_id = i.id) AS returned
-      FROM invoices i
+    return {
+      sql: `FROM invoices i
       LEFT JOIN customers c ON c.id = i.customer_id
       LEFT JOIN users u ON u.id = i.user_id
       WHERE date(i.created_at) BETWEEN ? AND ?
-        AND (? = '' OR i.code LIKE '%' || ? || '%' OR c.name LIKE '%' || ? || '%' OR c.phone LIKE '%' || ? || '%')
-      ORDER BY i.id DESC LIMIT 500`).all(from, to, q, q, q, q);
+        AND (? = '' OR i.code LIKE '%' || ? || '%' OR c.name LIKE '%' || ? || '%' OR c.phone LIKE '%' || ? || '%')`,
+      args: [day(req.query.from, today), day(req.query.to, today), q, q, q, q],
+    };
+  };
+
+  r.get('/invoices', (req, res) => {
+    const f = invoiceFilter(req);
+    const rows = db.prepare(`SELECT i.id, i.code, i.created_at, i.total, i.paid, i.debt, i.status,
+        c.name AS customer_name, u.name AS user_name,
+        (SELECT COALESCE(SUM(total),0) FROM returns r WHERE r.invoice_id = i.id) AS returned
+      ${f.sql}
+      ORDER BY i.id DESC LIMIT ${Math.min(Number(req.query.limit) || 500, 50000)}`).all(...f.args);
     res.json(rows);
+  });
+
+  // Tổng của toàn bộ hoá đơn khớp bộ lọc (danh sách chỉ hiện một phần)
+  r.get('/invoices/summary', (req, res) => {
+    const f = invoiceFilter(req);
+    res.json(db.prepare(`SELECT COUNT(*) AS count,
+        COALESCE(SUM(CASE WHEN i.status = 'done' THEN 1 ELSE 0 END), 0) AS done,
+        COALESCE(SUM(CASE WHEN i.status = 'done' THEN i.total - (SELECT COALESCE(SUM(total),0) FROM returns r WHERE r.invoice_id = i.id) ELSE 0 END), 0) AS net
+      ${f.sql}`).get(...f.args));
   });
 
   r.get('/invoices/:id', (req, res) => res.json(getInvoice(db, Number(req.params.id), isOwner(req))));

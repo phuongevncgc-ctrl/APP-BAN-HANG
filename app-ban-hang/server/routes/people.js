@@ -16,9 +16,16 @@ export default function peopleRoutes(db) {
       FROM customers c LEFT JOIN price_lists pl ON pl.id = c.price_list_id
       WHERE c.active = 1 AND (? = '' OR c.search LIKE ? OR c.phone LIKE ? OR c.code LIKE ?)
         AND (? = '0' OR c.debt != 0)
-      ORDER BY c.name COLLATE NOCASE LIMIT 300`)
+      ORDER BY c.name COLLATE NOCASE LIMIT ${Math.min(Number(req.query.limit) || 300, 20000)}`)
       .all(q, `%${q}%`, `%${raw}%`, `%${raw}%`, req.query.debt === '1' ? '1' : '0');
     res.json(rows);
+  });
+
+  // Tổng số khách và tổng nợ (tính trên toàn bộ khách, không phụ thuộc danh sách đang hiện)
+  r.get('/customers/stats', (_req, res) => {
+    res.json(db.prepare(`SELECT COUNT(*) AS total, COALESCE(SUM(debt > 0), 0) AS owing,
+        COALESCE(SUM(CASE WHEN debt > 0 THEN debt END), 0) AS debt_total
+      FROM customers WHERE active = 1`).get());
   });
 
   r.get('/customers/:id', (req, res) => {

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { openDb } from './db.js';
 import { createApp } from './app.js';
 import { backup } from './routes/admin.js';
+import { notifyTick } from './notify.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -57,6 +58,9 @@ setInterval(() => {
     runBackup();
   }
 }, 5 * 60 * 1000);
+
+// Báo cáo cuối ngày về điện thoại (nếu đã bật trong Cài đặt)
+setInterval(() => notifyTick(db).catch((err) => console.error(err)), 60 * 1000);
 
 for (const sig of ['SIGTERM', 'SIGINT']) {
   process.on(sig, () => {

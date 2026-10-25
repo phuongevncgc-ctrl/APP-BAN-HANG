@@ -308,6 +308,25 @@ const SCHEMA = [
 
   INSERT INTO settings (key, value) VALUES ('printers', '[]');
   `,
+  // v3: mã vạch không phân biệt hoa thường; chỉ mục cho kho dữ liệu lớn (20.000 hàng, nhiều năm hoá đơn)
+  `
+  DROP INDEX products_barcode;
+  CREATE INDEX products_barcode ON products(barcode COLLATE NOCASE);
+  DROP INDEX product_units_barcode;
+  CREATE INDEX product_units_barcode ON product_units(barcode COLLATE NOCASE);
+  CREATE INDEX invoices_customer ON invoices(customer_id);
+  CREATE INDEX invoice_items_product ON invoice_items(product_id);
+  CREATE INDEX returns_invoice ON returns(invoice_id);
+  CREATE INDEX returns_customer ON returns(customer_id);
+  CREATE INDEX purchases_supplier ON purchases(supplier_id);
+  CREATE INDEX purchase_items_purchase ON purchase_items(purchase_id);
+  CREATE INDEX supplier_returns_supplier ON supplier_returns(supplier_id);
+  CREATE INDEX payments_customer ON payments(customer_id);
+  CREATE INDEX payments_supplier ON payments(supplier_id);
+  CREATE INDEX payments_ref ON payments(kind, ref_id);
+  CREATE INDEX stock_moves_created ON stock_moves(created_at);
+  INSERT OR IGNORE INTO settings (key, value) VALUES ('notify', '{}');
+  `,
 ];
 
 export function openDb(file) {

@@ -1,5 +1,17 @@
 # Nhật ký thay đổi
 
+## 1.0.0-beta.2
+
+Chạy tốt với kho 20.000 mặt hàng và 1.500 khách (đã thử: tìm hàng dưới 0,02 giây, nhập file 20.000 hàng khoảng 3 giây).
+
+- **Báo cáo cuối ngày về điện thoại** qua ứng dụng Home Assistant: doanh thu, lợi nhuận gộp, chi phí, lãi ròng, tiền mặt / chuyển khoản, khách nợ thêm, thu nợ, hàng sắp hết. Chọn điện thoại và giờ gửi trong Cài đặt, có nút "Gửi thử ngay".
+- **Khôi phục dữ liệu** ngay trong app: chọn bản sao lưu trong máy hoặc tải file .db lên. App tự sao lưu dữ liệu hiện tại trước khi khôi phục, file hỏng thì báo lỗi và không đổi gì.
+- Sửa **tổng nợ khách** và **tổng tiền hoá đơn** bị tính thiếu khi danh sách dài (trước chỉ cộng 300 khách / 500 hoá đơn đầu). Giờ máy chủ cộng toàn bộ.
+- Danh sách hàng hoá, khách hàng, hoá đơn, bảng giá có nút **Xem thêm**, xem được hết 20.000 hàng.
+- **Mã vạch có chữ** quét / tìm không phân biệt hoa thường (mã hàng vốn đã không phân biệt).
+- Xuất Excel nhanh hơn 4-5 lần (20.000 hàng: 12 giây xuống 2,4 giây).
+- Thêm chỉ mục dữ liệu cho công nợ, trả hàng, nhập hàng, thẻ kho để chạy nhanh khi dữ liệu nhiều năm.
+
 ## 1.0.0-beta.1
 
 Bản thử nghiệm 1.0 (chú Phương viết, bác kiểm tra và bổ sung). Dữ liệu giữ nguyên.

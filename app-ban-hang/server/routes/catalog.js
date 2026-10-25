@@ -59,9 +59,9 @@ const STOCK_FILTERS = {
 // Mã hàng / mã vạch không được trùng giữa các hàng và các đơn vị quy đổi.
 function assertCodeFree(db, code, productId, label = 'Mã') {
   if (!code) return;
-  const p = db.prepare('SELECT name FROM products WHERE (code = ? OR barcode = ?) AND id != ?').get(code, code, productId ?? 0);
+  const p = db.prepare('SELECT name FROM products WHERE (code = ? OR barcode = ? COLLATE NOCASE) AND id != ?').get(code, code, productId ?? 0);
   const u = db.prepare(`SELECT p.name FROM product_units u JOIN products p ON p.id = u.product_id
-    WHERE (u.code = ? OR u.barcode = ?) AND u.product_id != ?`).get(code, code, productId ?? 0);
+    WHERE (u.code = ? OR u.barcode = ? COLLATE NOCASE) AND u.product_id != ?`).get(code, code, productId ?? 0);
   const hit = p ?? u;
   if (hit) throw bad(`${label} "${code}" đã dùng cho "${hit.name}"`);
 }
@@ -121,8 +121,8 @@ export default function catalogRoutes(db, { imagesDir }) {
     if (q) {
       // Tìm theo từng chữ: "ong 60" ra "Ống Hoa Sen 60"
       const words = q.split(/\s+/).filter(Boolean);
-      where.push(`((${words.map(() => 'p.search LIKE ?').join(' AND ')}) OR p.code LIKE ? OR p.barcode = ?
-        OR p.id IN (SELECT product_id FROM product_units WHERE code LIKE ? OR barcode = ?))`);
+      where.push(`((${words.map(() => 'p.search LIKE ?').join(' AND ')}) OR p.code LIKE ? OR p.barcode = ? COLLATE NOCASE
+        OR p.id IN (SELECT product_id FROM product_units WHERE code LIKE ? OR barcode = ? COLLATE NOCASE))`);
       args.push(...words.map((w) => `%${w}%`), `%${raw}%`, raw, `%${raw}%`, raw);
     }
     if (idOrNull(req.query.category)) {
@@ -135,7 +135,7 @@ export default function catalogRoutes(db, { imagesDir }) {
       LEFT JOIN categories c ON c.id = p.category_id
       LEFT JOIN price_list_items pli ON pli.product_id = p.id AND pli.unit_id = 0 AND pli.price_list_id = ?
       WHERE ${where.join(' AND ')}
-      ORDER BY p.name COLLATE NOCASE LIMIT ${Math.min(Number(req.query.limit) || 300, 5000)}`).all(listId ?? 0, ...args);
+      ORDER BY p.name COLLATE NOCASE LIMIT ${Math.min(Number(req.query.limit) || 300, 50000)}`).all(listId ?? 0, ...args);
     res.json(attachUnits(rows, listId));
   });
 
@@ -153,10 +153,10 @@ export default function catalogRoutes(db, { imagesDir }) {
     const code = str(req.query.code, 100);
     const listId = idOrNull(req.query.price_list);
     let unitId = null;
-    let pid = db.prepare('SELECT id FROM products WHERE active = 1 AND (barcode = ? OR code = ?) LIMIT 1').get(code, code)?.id;
+    let pid = db.prepare('SELECT id FROM products WHERE active = 1 AND (barcode = ? COLLATE NOCASE OR code = ?) LIMIT 1').get(code, code)?.id;
     if (!pid) {
       const u = db.prepare(`SELECT u.id, u.product_id FROM product_units u JOIN products p ON p.id = u.product_id
-        WHERE p.active = 1 AND (u.barcode = ? OR u.code = ?) LIMIT 1`).get(code, code);
+        WHERE p.active = 1 AND (u.barcode = ? COLLATE NOCASE OR u.code = ?) LIMIT 1`).get(code, code);
       if (u) [pid, unitId] = [u.product_id, u.id];
     }
     if (!pid) throw notFound(`Không có hàng mã "${code}"`);
@@ -443,7 +443,7 @@ export default function catalogRoutes(db, { imagesDir }) {
       FROM product_units u JOIN products p ON p.id = u.product_id
       LEFT JOIN price_list_items pli ON pli.product_id = p.id AND pli.unit_id = u.id AND pli.price_list_id = ?
       WHERE p.active = 1 AND (? = '' OR p.search LIKE ? OR p.code LIKE ?)
-      ORDER BY 4 COLLATE NOCASE, 2 LIMIT 3000`).all(id, q, `%${q}%`, `%${q}%`, id, q, `%${q}%`, `%${q}%`));
+      ORDER BY 4 COLLATE NOCASE, 2 LIMIT ${Math.min(Number(req.query.limit) || 300, 50000)}`).all(id, q, `%${q}%`, `%${q}%`, id, q, `%${q}%`, `%${q}%`));
   });
   r.put('/price-lists/:id/items', requireOwner, (req, res) => {
     const id = Number(req.params.id);

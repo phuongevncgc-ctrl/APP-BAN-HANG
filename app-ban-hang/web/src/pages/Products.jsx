@@ -277,6 +277,8 @@ function ProductForm({ id, categories, priceLists, onClose, onSaved, reloadCateg
 }
 
 
+const PAGE = 500;
+
 export default function Products({ route }) {
   const owner = isOwner(useUser());
   const [tab, setTab] = useState('products');
@@ -286,7 +288,9 @@ export default function Products({ route }) {
   const [showCost, setShowCost] = useState(false);
   const [importing, setImporting] = useState(false);
   const dq = useDebounced(q);
-  const list = useLoad(() => get(`/products?q=${encodeURIComponent(dq)}&stock=${filter}&category=${category}&limit=500`), [dq, filter, category]);
+  const [limit, setLimit] = useState(PAGE);
+  useEffect(() => setLimit(PAGE), [dq, filter, category]);
+  const list = useLoad(() => get(`/products?q=${encodeURIComponent(dq)}&stock=${filter}&category=${category}&limit=${limit}`), [dq, filter, category, limit]);
   const stats = useLoad(() => get('/products/stats'), []);
   const cats = useLoad(() => get('/categories'), []);
   const pls = useLoad(() => get('/price-lists'), []);
@@ -358,6 +362,11 @@ export default function Products({ route }) {
                     </span>
                   </button>
                 ))}
+                {rows.length >= limit && (
+                  <button className="btn btn-block" disabled={list.loading} onClick={() => setLimit(limit + PAGE)}>
+                    {list.loading ? 'Đang tải…' : `Đang hiện ${num(rows.length)} hàng · Xem thêm ${PAGE}`}
+                  </button>
+                )}
               </div>
             )}
           </Loading>

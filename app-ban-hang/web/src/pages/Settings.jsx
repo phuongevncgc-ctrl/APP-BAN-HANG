@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { get, post, put, setToken, downloadUrl } from '../api.js';
+import { get, post, put, setToken, getToken, downloadUrl } from '../api.js';
 import { money, vnd } from '../format.js';
-import { Field, Loading, Modal, useAction, useLoad } from '../components/ui.jsx';
+import { Field, Loading, Modal, useAction, useLoad, confirmAsk } from '../components/ui.jsx';
 import { useSettings, useUser, isOwner } from '../App.jsx';
 import { ReceiptBody, usePrint } from '../components/Receipt.jsx';
 import { renderReceipt, renderLabels, toImage, sendToPrinter, setPrintersCache } from '../printing.js';
@@ -211,26 +211,103 @@ function Users() {
   );
 }
 
+const RESTORE_WARN = 'Khôi phục sẽ thay TOÀN BỘ dữ liệu hiện tại (hàng hoá, hoá đơn, công nợ...) bằng bản sao lưu này.\n'
+  + 'Dữ liệu hiện tại sẽ được tự sao lưu trước khi khôi phục.\n\nChú chắc chắn muốn khôi phục?';
+
 function Backups() {
   const list = useLoad(() => get('/backups'), []);
   const [run, busy] = useAction();
+  const done = () => setTimeout(() => window.location.reload(), 800);
+  const restoreFrom = async (name) => {
+    if (!confirmAsk(`${RESTORE_WARN}\n\nBản: ${label(name)}`)) return;
+    if (await run(() => post(`/backups/${name}/restore`), 'Đã khôi phục dữ liệu')) done();
+  };
+  const upload = async (file) => {
+    if (!file || !confirmAsk(`${RESTORE_WARN}\n\nFile: ${file.name}`)) return;
+    const ok = await run(async () => {
+      const res = await fetch('api/backups/restore', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${getToken()}`, 'content-type': 'application/octet-stream' },
+        body: await file.arrayBuffer(),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Lỗi ${res.status}`);
+      return data;
+    }, 'Đã khôi phục dữ liệu');
+    if (ok) done();
+  };
+  const label = (name) => name.replace('banhang-', '').replace('.db', '').replace(/^(\d{4})-(\d\d)-(\d\d)-(\d\d)-(\d\d)-?(\d\d)?.*$/, '$3/$2/$1 $4:$5:$6');
   return (
     <div className="card">
       <div className="row-between">
-        <h3>Sao lưu dữ liệu</h3>
+        <h3>💾 Sao lưu dữ liệu</h3>
         <button className="btn btn-sm" disabled={busy} onClick={async () => (await run(() => post('/backups'), 'Đã sao lưu')) && list.reload()}>Sao lưu ngay</button>
       </div>
-      <p className="muted small">Máy tự sao lưu mỗi ngày lúc 23:30 và giữ 30 bản gần nhất. Nên tải một bản về máy khác hoặc USB mỗi tuần.</p>
+      <p className="muted small">Máy tự sao lưu mỗi ngày lúc 23:30 và giữ 30 bản gần nhất. Nên tải một bản về máy khác hoặc USB mỗi tuần.
+        Bản sao lưu của Home Assistant cũng chứa dữ liệu PSell.</p>
       <Loading state={list}>
         {(rows) => (
           <div className="list">
+            {rows.length === 0 && <div className="empty">Chưa có bản sao lưu</div>}
             {rows.slice(0, 10).map((b) => (
-              <a key={b.name} className="list-item" href={downloadUrl(`/backups/${b.name}`)} download>
-                <span className="grow">{b.name.replace('banhang-', '').replace('.db', '')}</span>
-                <small className="muted">{Math.round(b.size / 1024)} KB · Tải về</small>
-              </a>
+              <div key={b.name} className="list-item">
+                <span className="grow">{label(b.name)}<small className="muted block">{Math.round(b.size / 1024)} KB</small></span>
+                <a className="btn btn-sm" href={downloadUrl(`/backups/${b.name}`)} download>Tải về</a>
+                <button className="btn btn-sm" disabled={busy} onClick={() => restoreFrom(b.name)}>Khôi phục</button>
+              </div>
             ))}
           </div>
+        )}
+      </Loading>
+      <label className="btn btn-block">
+        📂 Khôi phục từ file .db trong máy
+        <input type="file" accept=".db" hidden disabled={busy} onChange={(e) => { upload(e.target.files[0]); e.target.value = ''; }} />
+      </label>
+    </div>
+  );
+}
+
+function Notify() {
+  const state = useLoad(() => get('/notify'), []);
+  const [f, setF] = useState(null);
+  const [run, busy] = useAction();
+  const cfg = f ?? state.data;
+  const toggle = (s) => setF({ ...cfg, services: cfg.services.includes(s) ? cfg.services.filter((x) => x !== s) : [...cfg.services, s] });
+  return (
+    <div className="card">
+      <h3>📲 Báo cáo cuối ngày về điện thoại</h3>
+      <p className="muted small">Mỗi ngày tới giờ hẹn, PSell gửi doanh thu, lợi nhuận, chi phí, tiền thu, công nợ và hàng sắp hết
+        về điện thoại qua ứng dụng Home Assistant (Companion app).</p>
+      <Loading state={state}>
+        {() => (
+          <>
+            {state.data.error && <div className="warn">{state.data.error}</div>}
+            {!state.data.error && state.data.available.length === 0 && (
+              <div className="warn">Chưa thấy điện thoại nào. Cài ứng dụng Home Assistant trên điện thoại và đăng nhập vào nhà mình trước.</div>
+            )}
+            {state.data.available.length > 0 && (
+              <>
+                <Field label="Gửi tới">
+                  <div className="list">
+                    {state.data.available.map((s) => (
+                      <label key={s} className="list-item">
+                        <input type="checkbox" checked={cfg.services.includes(s)} onChange={() => toggle(s)} />
+                        <span className="grow">{s.replace(/^mobile_app_/, '📱 ').replaceAll('_', ' ')}</span>
+                      </label>
+                    ))}
+                  </div>
+                </Field>
+                <div className="row gap">
+                  <Field label="Giờ gửi"><input className="input" type="time" value={cfg.time} onChange={(e) => setF({ ...cfg, time: e.target.value })} /></Field>
+                  <label className="row gap grow"><input type="checkbox" checked={cfg.enabled} onChange={(e) => setF({ ...cfg, enabled: e.target.checked })} /> Tự gửi mỗi ngày</label>
+                </div>
+                <div className="row gap">
+                  <button className="btn grow" disabled={busy || !cfg.services.length} onClick={() => run(() => post('/notify/test', { services: cfg.services }), 'Đã gửi báo cáo hôm nay, chú xem điện thoại')}>Gửi thử ngay</button>
+                  <button className="btn btn-primary grow" disabled={busy || !f} onClick={async () => (await run(() => put('/notify', cfg), 'Đã lưu')) && (setF(null), state.reload())}>Lưu</button>
+                </div>
+              </>
+            )}
+          </>
         )}
       </Loading>
     </div>
@@ -288,6 +365,7 @@ export default function Settings({ reloadSettings }) {
       {owner && <ShopSettings reloadSettings={reloadSettings} />}
       {owner && <Printers />}
       {owner && <Users />}
+      {owner && <Notify />}
       {owner && <Backups />}
       <Account reloadSettings={reloadSettings} />
     </div>
