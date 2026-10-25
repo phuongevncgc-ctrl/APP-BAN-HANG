@@ -14,6 +14,21 @@ export function checkPassword(password, stored) {
   return crypto.timingSafeEqual(hash, Buffer.from(hashHex, 'hex'));
 }
 
+// Đặt lại mật khẩu mọi tài khoản chủ (dùng khi quên mật khẩu). Mỗi mật khẩu chỉ áp dụng một lần,
+// để sau này chú đổi mật khẩu trong app rồi khởi động lại add-on thì không bị ghi đè.
+export function resetOwnerPassword(db, password) {
+  if (String(password).length < 12) throw new Error('Mật khẩu mới phải có ít nhất 12 ký tự');
+  const mark = crypto.createHash('sha256').update(String(password)).digest('hex');
+  if (db.prepare("SELECT 1 FROM settings WHERE key = 'reset_applied' AND value = ?").get(mark)) return null;
+  const owners = db.prepare("SELECT id, username FROM users WHERE role = 'owner'").all();
+  for (const u of owners) {
+    db.prepare('UPDATE users SET pass_hash = ?, active = 1 WHERE id = ?').run(hashPassword(password), u.id);
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(u.id);
+  }
+  db.prepare("INSERT INTO settings (key, value) VALUES ('reset_applied', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").run(mark);
+  return owners.map((u) => u.username);
+}
+
 export function createSession(db, userId) {
   const token = crypto.randomBytes(32).toString('hex');
   db.prepare('INSERT INTO sessions (token, user_id) VALUES (?, ?)').run(token, userId);

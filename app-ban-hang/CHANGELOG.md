@@ -1,5 +1,9 @@
 # Nhật ký thay đổi
 
+## 1.0.0-beta.6
+
+- **Quên mật khẩu chủ cửa hàng:** vào Home Assistant → add-on PSell → tab Cấu hình, điền "Đặt lại mật khẩu chủ cửa hàng", Lưu rồi Khởi động lại. Tên đăng nhập hiện ở tab Nhật ký. Dữ liệu giữ nguyên.
+
 ## 1.0.0-beta.5
 
 Thử với file Khách hàng (1.356 khách) và Nhà cung cấp (78 NCC) thật của cửa hàng: nhập đủ, không lỗi, tổng nợ khớp file.

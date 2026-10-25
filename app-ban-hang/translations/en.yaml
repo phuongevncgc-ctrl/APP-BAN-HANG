@@ -1,0 +1,15 @@
+configuration:
+  ssl:
+    name: Bật HTTPS
+    description: Dùng chứng chỉ trong thư mục /ssl của Home Assistant.
+  certfile:
+    name: File chứng chỉ
+  keyfile:
+    name: File khoá
+  backup_keep_days:
+    name: Số bản sao lưu giữ lại
+  reset_owner_password:
+    name: Đặt lại mật khẩu chủ cửa hàng (khi quên)
+    description: >-
+      Nhập mật khẩu mới (ít nhất 12 ký tự), bấm Lưu rồi Khởi động lại add-on.
+      Tên đăng nhập hiện ở tab Nhật ký. Đăng nhập được rồi thì xoá ô này và bấm Lưu.

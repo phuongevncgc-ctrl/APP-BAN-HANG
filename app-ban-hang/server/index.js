@@ -9,6 +9,7 @@ import { openDb } from './db.js';
 import { createApp } from './app.js';
 import { backup } from './routes/admin.js';
 import { notifyTick } from './notify.js';
+import { resetOwnerPassword } from './auth.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -28,6 +29,16 @@ const certfile = options.certfile ? path.join('/ssl', options.certfile) : proces
 const keyfile = options.keyfile ? path.join('/ssl', options.keyfile) : process.env.SSL_KEY;
 
 const db = openDb(path.join(dataDir, 'banhang.db'));
+
+// Quên mật khẩu: điền "reset_owner_password" trong tab Cấu hình của add-on rồi khởi động lại
+if (options.reset_owner_password) {
+  try {
+    const users = resetOwnerPassword(db, options.reset_owner_password);
+    if (users) console.log(`Đã đặt lại mật khẩu cho tài khoản chủ: ${users.join(', ')}. Hãy xoá mật khẩu trong tab Cấu hình.`);
+  } catch (err) {
+    console.error('Đặt lại mật khẩu lỗi:', err.message);
+  }
+}
 const app = createApp(db, { dataDir, webDir: path.join(here, '..', 'web', 'dist') });
 
 const server = ssl

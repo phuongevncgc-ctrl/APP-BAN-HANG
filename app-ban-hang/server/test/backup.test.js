@@ -112,3 +112,14 @@ test('báo cáo cuối ngày gửi về điện thoại qua Home Assistant', asy
   assert.equal(await notifyTick(db, at(21, 5)), false);
   assert.equal(haCalls.length, count + 1);
 });
+
+test('quên mật khẩu: đặt lại mật khẩu chủ qua cấu hình add-on, chỉ áp dụng một lần', async () => {
+  const { resetOwnerPassword } = await import('../auth.js');
+  assert.throws(() => resetOwnerPassword(db, 'ngan'), /12 ký tự/);
+  assert.deepEqual(resetOwnerPassword(db, 'matkhau-moi-2026'), ['chu']);
+  const login = await fetch(`${base}/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'CHU', password: 'matkhau-moi-2026' }) });
+  assert.equal(login.status, 200);
+  token = (await login.json()).token;
+  await put('/me/password', { old_password: 'matkhau-moi-2026', password: 'mat-khau-tu-doi-1' });
+  assert.equal(resetOwnerPassword(db, 'matkhau-moi-2026'), null, 'khởi động lại không ghi đè mật khẩu chú tự đổi');
+});
