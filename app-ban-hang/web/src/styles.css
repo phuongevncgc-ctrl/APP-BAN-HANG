@@ -321,6 +321,12 @@ details summary { cursor: pointer; font-weight: 600; min-height: 32px; }
 
 /* ---------- Hoá đơn in ---------- */
 #print-area { display: none; }
+.print-paper { background: #e9ecf1; border-radius: 8px; padding: 10px; overflow: hidden; }
+.print-paper > div { width: fit-content; margin: 0 auto; background: #fff; padding: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15); }
+.print-image { display: block; width: 380px; }
+.print-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.print-actions .btn { flex: 1 1 auto; }
+.print-actions .btn-primary { flex-basis: 100%; }
 .receipt { font-family: Arial, sans-serif; font-size: 12px; color: #000; line-height: 1.35; }
 .r-center { text-align: center; }
 .r-shop { font-size: 16px; font-weight: 800; }

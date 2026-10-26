@@ -133,6 +133,16 @@ class Painter {
   image() {
     return toImage(this.canvas, Math.min(this.y + 8, this.canvas.height));
   }
+
+  // Ảnh xem trước (đúng như máy in sẽ in ra)
+  dataUrl() {
+    const h = Math.min(this.y + 8, this.canvas.height);
+    const out = document.createElement('canvas');
+    out.width = this.canvas.width;
+    out.height = h;
+    out.getContext('2d').drawImage(this.canvas, 0, 0);
+    return out.toDataURL('image/png');
+  }
 }
 
 // Ảnh canvas -> dữ liệu bit (1 = đen) gửi cho máy chủ
@@ -154,7 +164,8 @@ export function toImage(canvas, height = canvas.height) {
 }
 
 // ---------- Hoá đơn khổ 80 / 58 ----------
-export function renderReceipt(inv, settings, type = 'k80') {
+// preview = true: trả về ảnh để xem trước thay vì dữ liệu gửi máy in
+export function renderReceipt(inv, settings, type = 'k80', preview = false) {
   const width = type === 'k58' ? 384 : 576;
   const p = new Painter(width, type === 'k58' ? 20 : 24);
   p.text(settings.shop_name, { size: 1.35, bold: true, align: 'center' });
@@ -200,7 +211,7 @@ export function renderReceipt(inv, settings, type = 'k80') {
     p.hr();
     p.text(settings.receipt_footer, { align: 'center' });
   }
-  return p.image();
+  return preview ? p.dataUrl() : p.image();
 }
 
 // ---------- Tem mã vạch ----------
@@ -277,16 +288,14 @@ export function sendToPrinter(printer, images, copies = 1) {
 }
 
 // In hoá đơn ra máy in IP đầu tiên. Trả về false nếu chưa cài máy in (để in bằng trình duyệt).
-export async function printReceiptIp(inv, settings) {
-  const printer = (await loadPrinters()).find((p) => p.type === 'k80' || p.type === 'k58');
-  if (!printer) return false;
-  await sendToPrinter(printer, [renderReceipt(inv, settings, printer.type)]);
-  return printer;
+// Máy in hoá đơn (K80/K58) đã cài, nếu có
+export async function receiptPrinter() {
+  return (await loadPrinters()).find((p) => p.type === 'k80' || p.type === 'k58') ?? null;
 }
 
 // ---------- Phiếu tổng kết (chốt ca) khổ K80 ----------
 // lines: [[nhãn, giá trị, đậm?] | 'hr' | 'tiêu đề nhóm']
-export function renderSummary(settings, title, sub, lines, type = 'k80') {
+export function renderSummary(settings, title, sub, lines, type = 'k80', preview = false) {
   const p = new Painter(type === 'k58' ? 384 : 576, type === 'k58' ? 20 : 24);
   p.text(settings.shop_name, { size: 1.2, bold: true, align: 'center' });
   p.text(title, { size: 1.2, bold: true, align: 'center' });
@@ -299,12 +308,5 @@ export function renderSummary(settings, title, sub, lines, type = 'k80') {
   }
   p.hr();
   p.text(`In lúc ${new Date().toLocaleString('vi-VN')}`, { size: 0.8, align: 'center' });
-  return p.image();
-}
-
-export async function printSummaryIp(settings, title, sub, lines) {
-  const printer = (await loadPrinters()).find((p) => p.type === 'k80' || p.type === 'k58');
-  if (!printer) return false;
-  await sendToPrinter(printer, [renderSummary(settings, title, sub, lines, printer.type)]);
-  return printer;
+  return preview ? p.dataUrl() : p.image();
 }

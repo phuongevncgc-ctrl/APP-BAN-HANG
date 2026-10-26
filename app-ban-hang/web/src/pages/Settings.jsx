@@ -118,7 +118,6 @@ function Printers() {
   );
 }
 
-// Mã BIN ngân hàng cho VietQR
 
 function ShopSettings({ reloadSettings }) {
   const settings = useSettings();
@@ -140,6 +139,7 @@ function ShopSettings({ reloadSettings }) {
           {['80', '58'].map((w) => <button key={w} className={f.receipt_width === w ? 'on' : ''} onClick={() => setF({ ...f, receipt_width: w })}>{w}mm</button>)}
         </div>
       </Field>
+      <label className="check"><input type="checkbox" checked={f.print_preview !== '0'} onChange={(e) => setF({ ...f, print_preview: e.target.checked ? '1' : '0' })} /> Xem trước trang in rồi mới in</label>
       <label className="check"><input type="checkbox" checked={f.allow_negative_stock !== '0'} onChange={(e) => setF({ ...f, allow_negative_stock: e.target.checked ? '1' : '0' })} /> Cho bán khi hết hàng (âm kho)</label>
       <h3>Tài khoản nhận chuyển khoản (hiện mã QR)</h3>
       <Field label="Ngân hàng">

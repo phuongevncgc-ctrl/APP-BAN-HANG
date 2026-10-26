@@ -1,5 +1,10 @@
 # Nhật ký thay đổi
 
+## 1.0.0-rc.3
+
+- **Xem trước rồi mới in:** bấm In hoá đơn, In A4, báo giá, sổ công nợ, phiếu chốt ca... đều hiện trang xem trước trên màn hình. Xem đúng rồi bấm **🖨️ In**, không thì bấm Đóng. Có máy in hoá đơn qua IP thì trang xem trước chính là bản máy in sẽ in ra, có thêm nút "In bằng trình duyệt".
+- Muốn in luôn không cần xem trước: vào Cài đặt → bỏ chọn "Xem trước trang in rồi mới in".
+
 ## 1.0.0-rc.2
 
 - **Báo cáo so sánh:** doanh thu, lợi nhuận hôm nay so với hôm trước (7 ngày so với 7 ngày trước...), có mũi tên ▲ tăng / ▼ giảm.

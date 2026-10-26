@@ -1,9 +1,9 @@
 import { createPortal } from 'react-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { money, num, dateTime, METHOD_NAMES, moneyToWords } from '../format.js';
 import { useSettings } from '../App.jsx';
-import { useToast } from './ui.jsx';
-import { printReceiptIp } from '../printing.js';
+import { Modal, useToast } from './ui.jsx';
+import { receiptPrinter, renderReceipt, sendToPrinter } from '../printing.js';
 import { vietQrImage } from '../vietqr.js';
 
 export function vietQrUrl(settings, amount, info) {
@@ -120,9 +120,34 @@ export function InvoiceA4({ inv, settings, quote = false }) {
   );
 }
 
-// In hoá đơn: đặt nội dung vào vùng in rồi gọi lệnh in của trình duyệt.
+// Trang giấy thu nhỏ vừa màn hình điện thoại (hoá đơn A4 rộng hơn màn hình)
+function Paper({ children }) {
+  const box = useRef(null);
+  useLayoutEffect(() => {
+    const el = box.current;
+    const inner = el.firstChild;
+    const fit = () => {
+      inner.style.zoom = 1;
+      inner.style.zoom = Math.min(1, (el.clientWidth - 20) / inner.scrollWidth);
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [children]);
+  return <div className="print-paper" ref={box}><div>{children}</div></div>;
+}
+
+// In: hiện trang xem trước, bấm "In" mới in.
+// print(content, { title, image, printer, send }):
+//   content: nội dung in bằng trình duyệt; image + send: in thẳng ra máy in IP (image là ảnh xem trước đúng như bản in)
+// Cài đặt "Xem trước khi in" tắt thì in luôn như trước.
 export function usePrint() {
+  const settings = useSettings();
+  const toast = useToast();
   const [content, setContent] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [sending, setSending] = useState(false);
   useEffect(() => {
     if (!content) return undefined;
     const t = setTimeout(() => {
@@ -131,8 +156,47 @@ export function usePrint() {
     }, 50);
     return () => clearTimeout(t);
   }, [content]);
-  const portal = content ? createPortal(content, document.getElementById('print-area')) : null;
-  return [setContent, portal];
+  const run = async (job) => {
+    if (!job.send) return setContent(job.content);
+    setSending(true);
+    try {
+      await job.send();
+      toast(`Đã gửi in tới ${job.printer}`);
+      return true;
+    } catch (err) {
+      toast(`${err.message} Đang chuyển sang in bằng trình duyệt.`, 'error');
+      setContent(job.content);
+    } finally {
+      setSending(false);
+    }
+  };
+  const print = (c, opts = {}) => {
+    const job = { content: c, ...opts };
+    if (settings.print_preview === '0') run(job);
+    else setPreview(job);
+  };
+  const close = () => setPreview(null);
+  const portal = (
+    <>
+      {content && createPortal(content, document.getElementById('print-area'))}
+      {preview && createPortal(
+        <Modal title={preview.title ?? 'Xem trước khi in'} onClose={close} wide
+          footer={(
+            <div className="print-actions">
+              <button className="btn btn-primary btn-lg" disabled={sending} onClick={async () => { await run(preview); close(); }}>
+                🖨️ In{preview.printer ? ` ra ${preview.printer}` : ''}
+              </button>
+              {preview.send && <button className="btn" onClick={() => { setContent(preview.content); close(); }}>In bằng trình duyệt</button>}
+              <button className="btn" onClick={close}>Đóng</button>
+            </div>
+          )}>
+          <Paper>{preview.image ? <img className="print-image" src={preview.image} alt="Bản xem trước" /> : preview.content}</Paper>
+        </Modal>,
+        document.body,
+      )}
+    </>
+  );
+  return [print, portal];
 }
 
 export function shareText(inv, settings) {
@@ -152,19 +216,23 @@ export function shareText(inv, settings) {
 // In hoá đơn nhỏ: ưu tiên máy in IP đã cài, không có hoặc lỗi thì in bằng trình duyệt.
 export function useReceiptPrint() {
   const settings = useSettings();
-  const toast = useToast();
   const [print, portal] = usePrint();
   const printReceipt = async (inv) => {
+    const body = <ReceiptBody inv={inv} settings={settings} />;
+    const title = `In hoá đơn ${inv.code ?? ''}`;
+    let printer = null;
     try {
-      const printer = await printReceiptIp(inv, settings);
-      if (printer) {
-        toast(`Đã gửi in tới ${printer.name}`);
-        return;
-      }
-    } catch (err) {
-      toast(`${err.message} Đang chuyển sang in bằng trình duyệt.`, 'error');
+      printer = await receiptPrinter();
+    } catch {
+      /* không đọc được danh sách máy in: in bằng trình duyệt */
     }
-    print(<ReceiptBody inv={inv} settings={settings} />);
+    if (!printer) return print(body, { title });
+    print(body, {
+      title,
+      printer: printer.name,
+      image: renderReceipt(inv, settings, printer.type, true),
+      send: () => sendToPrinter(printer, [renderReceipt(inv, settings, printer.type)]),
+    });
   };
   return [printReceipt, portal, print];
 }

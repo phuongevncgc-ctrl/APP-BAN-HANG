@@ -8,7 +8,7 @@ import { requireOwner } from '../auth.js';
 import { str, day, bad } from '../util.js';
 import { readNotify, saveNotify, notifyServices, sendDaily } from '../notify.js';
 
-const SETTING_KEYS = ['shop_name', 'shop_address', 'shop_phone', 'receipt_footer', 'receipt_width', 'bank_bin', 'bank_account', 'bank_holder', 'allow_negative_stock'];
+const SETTING_KEYS = ['shop_name', 'shop_address', 'shop_phone', 'receipt_footer', 'receipt_width', 'bank_bin', 'bank_account', 'bank_holder', 'allow_negative_stock', 'print_preview'];
 
 export function getSettings(db) {
   return Object.fromEntries(db.prepare('SELECT key, value FROM settings').all().map((r) => [r.key, r.value]));

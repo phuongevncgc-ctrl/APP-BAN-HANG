@@ -4,7 +4,7 @@ import { money, vnd, dateTime, isoDay, METHOD_NAMES } from '../format.js';
 import { DateRange, Field, Loading, Modal, MoneyInput, useAction, useLoad, confirmAsk, useToast } from '../components/ui.jsx';
 import { useUser, isOwner, useSettings } from '../App.jsx';
 import { usePrint } from '../components/Receipt.jsx';
-import { printSummaryIp } from '../printing.js';
+import { receiptPrinter, renderSummary, sendToPrinter } from '../printing.js';
 
 const KIND_SHORT = {
   sale: 'Bán hàng', return: 'Hoàn tiền trả hàng', debt_in: 'Thu nợ', purchase: 'Trả tiền nhập hàng', debt_out: 'Trả nợ NCC',
@@ -37,7 +37,6 @@ function EntryForm({ kind, onClose, onSaved }) {
 function Shift({ onClose }) {
   const owner = isOwner(useUser());
   const settings = useSettings();
-  const toast = useToast();
   const [mine, setMine] = useState(!owner);
   const state = useLoad(() => get(`/reports/shift${mine ? '?user=me' : ''}`), [mine]);
   const [print, portal] = usePrint();
@@ -62,21 +61,23 @@ function Shift({ onClose }) {
   const doPrint = async (s) => {
     const lines = linesOf(s);
     const sub = `${s.day.split('-').reverse().join('/')} · ${s.user}`;
-    try {
-      const p = await printSummaryIp(settings, 'CHỐT CA', sub, lines);
-      if (p) return toast(`Đã gửi in tới ${p.name}`);
-    } catch (err) {
-      toast(err.message, 'error');
-    }
-    print(
+    const body = (
       <div className="receipt" style={{ width: settings.receipt_width === '58' ? '54mm' : '76mm' }}>
         <div className="r-center r-shop">{settings.shop_name}</div>
         <div className="r-center r-title">CHỐT CA</div>
         <div className="r-center">{sub}</div>
         {lines.map((l, i) => (l === 'hr' ? <div key={i} className="r-foot" /> : typeof l === 'string' ? <b key={i}>{l}</b>
           : <div key={i} className={`r-row ${l[2] ? 'r-big' : ''}`}><span>{l[0]}</span><span>{l[1]}</span></div>))}
-      </div>,
+      </div>
     );
+    const printer = await receiptPrinter().catch(() => null);
+    if (!printer) return print(body, { title: 'In phiếu chốt ca' });
+    print(body, {
+      title: 'In phiếu chốt ca',
+      printer: printer.name,
+      image: renderSummary(settings, 'CHỐT CA', sub, lines, printer.type, true),
+      send: () => sendToPrinter(printer, [renderSummary(settings, 'CHỐT CA', sub, lines, printer.type)]),
+    });
   };
   return (
     <Modal title="🧮 Chốt ca hôm nay" onClose={onClose}
