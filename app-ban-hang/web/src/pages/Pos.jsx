@@ -3,12 +3,12 @@ import { get, post, del } from '../api.js';
 import { money, num, vnd, moneyToWords, dateTime, dateOnly } from '../format.js';
 import { Modal, MoneyInput, QtyInput, Field, useAction, useToast, confirmAsk } from '../components/ui.jsx';
 import { ProductSearch, CustomerPicker, unitOptions } from '../components/Pickers.jsx';
-import { ReceiptActions, InvoiceA4, useReceiptPrint, vietQrUrl } from '../components/Receipt.jsx';
+import { ReceiptActions, InvoiceA4, Paper, useReceiptPrint, vietQrUrl } from '../components/Receipt.jsx';
 import { useSettings, useUser, isOwner } from '../App.jsx';
 
 const STORE_KEY = 'banhang_carts';
 let seq = Date.now();
-const newKey = () => ++seq;
+const newKey = () => `psell-${Date.now()}-${++seq}-${Math.random().toString(36).slice(2)}`;
 
 const emptyCart = () => ({
   key: newKey(), lines: [], customer: null, priceListId: null,
@@ -183,7 +183,7 @@ function CartLine({ index, line, owner, last, onQty, onOpen, onRemove, onUseLast
 }
 
 // ---------- Thanh toán ----------
-function Checkout({ cart, set, t, priceLists, onFinish, onDraft, onQuote, busy, compact }) {
+function Checkout({ cart, set, t, priceLists, onFinish, onDraft, onQuote, onPreview, busy, compact }) {
   const settings = useSettings();
   const [pickCustomer, setPickCustomer] = useState(false);
   const [discEdit, setDiscEdit] = useState(false);
@@ -309,6 +309,9 @@ function Checkout({ cart, set, t, priceLists, onFinish, onDraft, onQuote, busy, 
       <input className="input" placeholder="Ghi chú" value={cart.note} onChange={(e) => set({ note: e.target.value })} />
 
       <div className="row gap">
+        <button className="btn grow" disabled={busy || !cart.lines.length} onClick={onPreview}>👁 Xem trước hóa đơn</button>
+      </div>
+      <div className="row gap">
         <button className="btn btn-lg" disabled={busy || !cart.lines.length} onClick={onDraft}>💾 Lưu tạm</button>
         <button className="btn btn-success btn-lg grow" disabled={busy || !cart.lines.length} onClick={() => onFinish(true)}>✅ Hoàn tất & In</button>
       </div>
@@ -393,6 +396,7 @@ export default function Pos() {
   const [editing, setEditing] = useState(null);
   const [mobilePay, setMobilePay] = useState(false);
   const [done, setDone] = useState(null);
+  const [preview, setPreview] = useState(false);
   const [drafts, setDrafts] = useState(false);
   const [draftCount, setDraftCount] = useState(0);
   const [priceLists, setPriceLists] = useState([]);
@@ -412,6 +416,18 @@ export default function Pos() {
 
   const cart = carts[Math.min(active, carts.length - 1)];
   const t = totals(cart);
+  const previewInvoice = () => ({
+    code: 'CHƯA PHÁT HÀNH', created_at: new Date().toLocaleString('sv'),
+    customer_id: cart.customer?.id ?? null, customer_name: cart.customer?.name || 'Khách lẻ',
+    customer_phone: cart.customer?.phone, customer_address: cart.customer?.address,
+    customer_debt: (Number(cart.customer?.debt) || 0) + t.debt, user_name: user.name,
+    subtotal: t.subtotal, discount: t.discount, total: t.total,
+    paid: Math.min(t.paid, t.total), change_amount: t.change,
+    payments: t.payments, items: cart.lines.filter(l => l.qty > 0).map(l => ({
+      id: l.key, product_code: l.code, name: l.name, unit: l.unit,
+      qty: l.qty, price: l.price, discount: lineDiscount(l), total: lineTotal(l),
+    })),
+  });
   // Giá đã bán cho khách này lần trước (theo hàng + đơn vị)
   const [lastPrices, setLastPrices] = useState({});
   const lastKey = cart.customer ? `${cart.customer.id}|${[...new Set(cart.lines.map((l) => l.product_id))].sort().join(',')}` : '';
@@ -496,6 +512,8 @@ export default function Pos() {
       payments: t.payments,
       note: cart.note,
       draft_id: cart.draftId,
+      // Mã chống trùng: bấm 2 lần hoặc mạng chập chờn gửi lại thì không tạo thêm hoá đơn
+      request_key: typeof cart.key === 'string' ? cart.key : undefined,
     }));
     if (!inv) return;
     setCarts((cs) => {
@@ -569,7 +587,7 @@ export default function Pos() {
       </div>
 
       <div className="pos-right">
-        <Checkout cart={cart} set={setCheckout} t={t} priceLists={priceLists} onFinish={finish} onDraft={saveDraft} onQuote={quote} busy={busy} />
+        <Checkout cart={cart} set={setCheckout} t={t} priceLists={priceLists} onFinish={finish} onDraft={saveDraft} onQuote={quote} onPreview={() => setPreview(true)} busy={busy} />
       </div>
 
       <div className="pos-bar">
@@ -582,7 +600,7 @@ export default function Pos() {
 
       {mobilePay && (
         <Modal title="Thanh toán" onClose={() => setMobilePay(false)}>
-          <Checkout cart={cart} set={setCheckout} t={t} priceLists={priceLists} onFinish={finish} onDraft={saveDraft} onQuote={quote} busy={busy} compact />
+          <Checkout cart={cart} set={setCheckout} t={t} priceLists={priceLists} onFinish={finish} onDraft={saveDraft} onQuote={quote} onPreview={() => setPreview(true)} busy={busy} compact />
         </Modal>
       )}
       {editing && (
@@ -599,6 +617,13 @@ export default function Pos() {
         />
       )}
       {drafts && <Drafts onOpen={openDraft} onClose={() => setDrafts(false)} />}
+      {preview && (
+        <Modal title="Xem trước hóa đơn · CHƯA GHI SỔ" onClose={() => setPreview(false)}
+          footer={<div className="row gap"><button className="btn grow" onClick={() => setPreview(false)}>Quay lại chỉnh sửa</button><button className="btn btn-success grow" disabled={busy} onClick={() => { setPreview(false); finish(false); }}>Xác nhận thanh toán</button></div>}>
+          <p className="muted">Đây là bản xem trước, chưa có số hóa đơn thật, chưa trừ kho hay ghi công nợ. Chỉ in bản chính thức sau khi thanh toán thành công.</p>
+          <Paper><InvoiceA4 inv={previewInvoice()} settings={settings} /></Paper>
+        </Modal>
+      )}
       {done && (
         <Modal title={`Đã bán xong ${done.code}`} onClose={() => setDone(null)}>
           <div className="done-box">

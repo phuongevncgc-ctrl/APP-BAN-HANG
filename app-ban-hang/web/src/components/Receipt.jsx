@@ -16,7 +16,7 @@ export function ReceiptBody({ inv, settings }) {
   const cashPaid = inv.payments.filter((p) => p.amount > 0).reduce((s, p) => s + p.amount, 0) + inv.change_amount;
   return (
     <div className="receipt" style={{ width: settings.receipt_width === '58' ? '54mm' : '76mm' }}>
-      <div className="r-center r-shop">{settings.shop_name}</div>
+      <div className="r-center"><img src="psell-logo.svg" alt="PSell" style={{ width: 36, height: 36 }} /></div><div className="r-center r-shop">{settings.shop_name}</div>
       {settings.shop_address && <div className="r-center">{settings.shop_address}</div>}
       {settings.shop_phone && <div className="r-center">ĐT: {settings.shop_phone}</div>}
       <div className="r-center r-title">PHIẾU BÁN HÀNG</div>
@@ -121,7 +121,7 @@ export function InvoiceA4({ inv, settings, quote = false }) {
 }
 
 // Trang giấy thu nhỏ vừa màn hình điện thoại (hoá đơn A4 rộng hơn màn hình)
-function Paper({ children }) {
+export function Paper({ children }) {
   const box = useRef(null);
   useLayoutEffect(() => {
     const el = box.current;
@@ -136,6 +136,20 @@ function Paper({ children }) {
     return () => ro.disconnect();
   }, [children]);
   return <div className="print-paper" ref={box}><div>{children}</div></div>;
+}
+
+// Ứng dụng Home Assistant trên điện thoại không có lệnh in của trình duyệt: phải mở PSell bằng Chrome / Safari
+const IN_HA_APP = /Home ?Assistant\//i.test(navigator.userAgent);
+const DIRECT_URL = 'http://<IP máy Home Assistant>:8099';
+
+function HaAppWarn() {
+  return (
+    <div className="warn">
+      ⚠️ Ứng dụng Home Assistant trên điện thoại <b>không in bằng trình duyệt được</b>. Cách in:
+      <br />• Máy in hoá đơn có dây mạng / Wi-Fi: vào <a href="#/cai-dat"><b>Cài đặt → Máy in</b></a> điền IP máy in, PSell sẽ in thẳng.
+      <br />• Hoặc mở PSell bằng <b>Chrome</b>: <b>{DIRECT_URL}</b>, đăng nhập rồi bấm In.
+    </div>
+  );
 }
 
 // In: hiện trang xem trước, bấm "In" mới in.
@@ -157,7 +171,10 @@ export function usePrint() {
     return () => clearTimeout(t);
   }, [content]);
   const run = async (job) => {
-    if (!job.send) return setContent(job.content);
+    if (!job.send) {
+      if (IN_HA_APP) toast('Ứng dụng Home Assistant không in bằng trình duyệt được. Cài máy in IP trong Cài đặt, hoặc mở PSell bằng Chrome.', 'error');
+      return setContent(job.content);
+    }
     setSending(true);
     try {
       await job.send();
@@ -190,6 +207,7 @@ export function usePrint() {
               <button className="btn" onClick={close}>Đóng</button>
             </div>
           )}>
+          {IN_HA_APP && <HaAppWarn />}
           <Paper>{preview.image ? <img className="print-image" src={preview.image} alt="Bản xem trước" /> : preview.content}</Paper>
         </Modal>,
         document.body,

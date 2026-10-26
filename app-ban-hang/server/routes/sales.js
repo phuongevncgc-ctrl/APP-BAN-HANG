@@ -1,4 +1,5 @@
 // Bán hàng, trả hàng, nhập hàng.
+import { createHash } from 'node:crypto';
 import { Router } from 'express';
 import { tx, nextCode } from '../db.js';
 import { requireOwner, isOwner } from '../auth.js';
@@ -85,7 +86,6 @@ export function createInvoice(db, user, body) {
     const baseCost = parts ? parts.reduce((s, c) => s + c.cost * c.qty, 0) : p.cost;
     return { p, u, parts, baseCost, qty: q, price, discount, total: Math.round(q * (price - discount)) };
   });
-  checkStock(db, lines);
 
   const subtotal = lines.reduce((s, l) => s + l.total, 0);
   const discount = money(body.discount, 'Giảm giá hoá đơn');
@@ -105,7 +105,25 @@ export function createInvoice(db, user, body) {
   const debt = total - paid;
   if (debt > 0 && !customerId) throw bad('Khách chưa trả đủ tiền. Hãy chọn khách hàng để ghi nợ.');
 
+  const requestKey = body.request_key == null ? null : String(body.request_key).trim();
+  if (requestKey && (requestKey.length < 8 || requestKey.length > 128)) throw bad('Mã yêu cầu thanh toán không hợp lệ');
+  const payloadHash = requestKey ? createHash('sha256').update(JSON.stringify({
+    customerId, priceListId, lines: lines.map(l => [l.p.id, l.u.unit_id, l.qty, l.price, l.discount]),
+    discount, pays, note: str(body.note),
+  })).digest('hex') : null;
+
   return tx(db, () => {
+    if (requestKey) {
+      const previous = db.prepare('SELECT payload_hash, invoice_id FROM invoice_requests WHERE request_key = ?').get(requestKey);
+      if (previous) {
+        if (previous.payload_hash !== payloadHash) {
+          const code = db.prepare('SELECT code FROM invoices WHERE id = ?').get(previous.invoice_id)?.code;
+          throw bad(`Đơn này đã thanh toán thành công (hoá đơn ${code}) nên không sửa rồi thanh toán lại được. Vào Hoá đơn để kiểm tra, rồi bấm + để mở đơn mới.`);
+        }
+        return getInvoice(db, previous.invoice_id, true);
+      }
+    }
+    checkStock(db, lines);
     const code = nextCode(db, 'invoices', 'HD');
     const { lastInsertRowid: id } = db.prepare(`INSERT INTO invoices
       (code, user_id, customer_id, price_list_id, subtotal, discount, total, paid, change_amount, debt, note)
@@ -121,6 +139,7 @@ export function createInvoice(db, user, body) {
         Math.round(l.baseCost * l.u.factor), l.total, components);
       moveLineStock(db, l.p.id, l.parts, -l.qty * l.u.factor, 'sale', id);
     }
+    if (requestKey) db.prepare('INSERT INTO invoice_requests (request_key, payload_hash, invoice_id) VALUES (?, ?, ?)').run(requestKey, payloadHash, id);
     if (idOrNull(body.draft_id)) db.prepare('DELETE FROM drafts WHERE id = ?').run(idOrNull(body.draft_id));
     for (const p of pays) {
       if (p.amount > 0) addPayment(db, { kind: 'sale', ref_id: id, customer_id: customerId, method: p.method, amount: p.amount, user_id: user.id });
@@ -153,6 +172,8 @@ export function createReturn(db, user, body) {
   if (inv.status !== 'done') throw bad('Hoá đơn đã huỷ, không trả hàng được');
   const wanted = (Array.isArray(body.items) ? body.items : []).filter((it) => Number(it.qty) > 0);
   if (!wanted.length) throw bad('Chưa chọn hàng trả');
+  const returnIds = wanted.map(w => idOrNull(w.invoice_item_id));
+  if (new Set(returnIds).size !== returnIds.length) throw bad('Một dòng hàng không được xuất hiện hai lần trong phiếu trả');
   const method = body.refund_method ?? 'cash';
   if (method === 'debt' && !inv.customer_id) throw bad('Hoá đơn không có khách hàng nên không trừ nợ được');
   if (method !== 'debt' && !METHODS.includes(method)) throw bad('Hình thức hoàn tiền không hợp lệ');

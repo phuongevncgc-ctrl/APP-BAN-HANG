@@ -16,5 +16,13 @@ if ('serviceWorker' in navigator && window.isSecureContext && !import.meta.env.D
 
 // Đang gõ chữ / số (bàn phím điện thoại mở) thì ẩn thanh menu dưới cho rộng chỗ
 const typingField = (el) => (el?.tagName === 'INPUT' && !['checkbox', 'radio', 'file', 'button', 'submit'].includes(el.type)) || el?.tagName === 'TEXTAREA';
-document.addEventListener('focusin', (e) => document.body.classList.toggle('typing', typingField(e.target)));
-document.addEventListener('focusout', () => setTimeout(() => document.body.classList.toggle('typing', typingField(document.activeElement)), 50));
+// Bỏ chế độ gõ thì đợi một chút: nếu đổi bố cục ngay lúc ngón tay vừa chạm nút (vd "Thanh toán"),
+// nút bị dời chỗ trước khi nhấc tay nên bấm không ăn.
+let typingTimer;
+const updateTyping = () => {
+  clearTimeout(typingTimer);
+  if (typingField(document.activeElement)) document.body.classList.add('typing');
+  else typingTimer = setTimeout(() => document.body.classList.toggle('typing', typingField(document.activeElement)), 400);
+};
+document.addEventListener('focusin', updateTyping);
+document.addEventListener('focusout', () => setTimeout(updateTyping, 0));

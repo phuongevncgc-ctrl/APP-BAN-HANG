@@ -82,6 +82,7 @@ function Login({ shopName, onDone }) {
   };
   return (
     <form className="auth card" onSubmit={submit}>
+      <div style={{ textAlign: 'center' }}><img src="psell-logo.svg" alt="Logo PSell" width="70" height="70" /></div>
       <h1>{shopName || 'PSell'}</h1>
       <Field label="Tên đăng nhập">
         <input className="input" autoCapitalize="none" autoComplete="username" value={f.username} onChange={(e) => setF({ ...f, username: e.target.value })} />

@@ -206,3 +206,15 @@ test('báo cáo: so với kỳ trước, theo giờ, gợi ý nhập hàng, hàn
   const owing = await get('/customers?debt=1&sort=debt');
   assert.ok(owing.every((c, i) => i === 0 || owing[i - 1].debt >= c.debt));
 });
+
+test('bấm thanh toán 2 lần / gửi lại cùng mã: chỉ có 1 hoá đơn, không trừ kho 2 lần', async () => {
+  const p = await post('/products', { name: 'Hàng chống trùng', price: 5000, cost: 1000, stock: 10 });
+  const body = { items: [{ product_id: p.id, qty: 2, price: 5000 }], payments: [{ method: 'cash', amount: 10000 }], request_key: 'psell-test-123456' };
+  const [a, b] = await Promise.all([post('/invoices', body), post('/invoices', body)]);
+  assert.equal(a.id, b.id);
+  assert.equal((await get(`/products/${p.id}`)).stock, 8);
+  await assert.rejects(post('/invoices', { ...body, items: [{ product_id: p.id, qty: 3, price: 5000 }], payments: [{ method: 'cash', amount: 15000 }] }), new RegExp(`đã thanh toán thành công \\(hoá đơn ${a.code}\\)`));
+  // Trả hàng: một dòng không được lặp 2 lần trong cùng phiếu
+  const line = a.items[0].id;
+  await assert.rejects(post('/returns', { invoice_id: a.id, items: [{ invoice_item_id: line, qty: 1 }, { invoice_item_id: line, qty: 1 }], refund_method: 'cash' }), /hai lần/);
+});

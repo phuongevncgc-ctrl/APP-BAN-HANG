@@ -1,5 +1,16 @@
 # Nhật ký thay đổi
 
+## 1.0.0-rc.4
+
+Gộp bản "RC2 Xem trước + Logo" của chú vào bản mới nhất, kiểm thử lại.
+
+- **Chống trùng hoá đơn:** bấm "Hoàn tất" 2 lần hoặc mạng chập chờn rồi gửi lại thì chỉ có 1 hoá đơn, không trừ kho và ghi tiền 2 lần. Đơn đã thanh toán rồi mà sửa giỏ và thanh toán lại thì app báo số hoá đơn đã có (từ bản của chú).
+- **Xem trước hoá đơn trước khi thanh toán** (nút "👁 Xem trước hóa đơn" trong màn Thanh toán), chưa ghi sổ, chưa trừ kho. Bản xem trước tự thu nhỏ vừa màn hình điện thoại (từ bản của chú).
+- **Logo PSell mới** ở trang đăng nhập, biểu tượng app và hoá đơn in (từ bản của chú). Sửa đường dẫn logo để hiện được khi mở qua Home Assistant.
+- Phiếu trả hàng không cho một dòng hàng lặp 2 lần (từ bản của chú).
+- **Sửa lỗi bấm "Thanh toán" không ăn:** vừa chọn hàng xong (bàn phím còn mở) mà bấm Thanh toán ngay thì thanh dưới bị dời chỗ, phải bấm lại. Giờ bấm một lần là được.
+- Đang dùng **ứng dụng Home Assistant trên điện thoại** thì trang in hiện hướng dẫn: ứng dụng này không in bằng trình duyệt được, dùng máy in IP hoặc mở PSell bằng Chrome.
+
 ## 1.0.0-rc.3
 
 - **Xem trước rồi mới in:** bấm In hoá đơn, In A4, báo giá, sổ công nợ, phiếu chốt ca... đều hiện trang xem trước trên màn hình. Xem đúng rồi bấm **🖨️ In**, không thì bấm Đóng. Có máy in hoá đơn qua IP thì trang xem trước chính là bản máy in sẽ in ra, có thêm nút "In bằng trình duyệt".
