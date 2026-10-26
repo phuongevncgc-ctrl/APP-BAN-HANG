@@ -1,5 +1,10 @@
 # Nhật ký thay đổi
 
+## 1.0.0-rc.4.1
+
+- **Lập phiếu nhập từ gợi ý:** trong phiếu nhập bấm "📋 Thêm hàng cần nhập (theo gợi ý)", tick các món cần nhập, sửa số lượng rồi thêm cả loạt vào phiếu. Không phải gõ tìm từng món.
+- **Gợi ý nhập hàng tính đúng hàng bán qua combo:** trước đây món bán trong combo (vd bán "Bộ kẹp" trừ 10 cái kẹp) không được tính vào tốc độ bán, nên không hiện trong "Cần nhập thêm" và có thể bị xếp nhầm vào "Bán chậm". Nay tính theo thẻ kho, đã trừ hàng khách trả và hoá đơn huỷ.
+
 ## 1.0.0-rc.4
 
 Gộp bản "RC2 Xem trước + Logo" của chú vào bản mới nhất, kiểm thử lại.

@@ -92,3 +92,23 @@ test('giá bán lần trước cho khách theo hàng và đơn vị', async () =
   assert.deepEqual(last[`${p.id}:0`].price, 98000);
   assert.equal(last[`${p.id}:${prod.units[0].id}`].price, 370000);
 });
+
+test('gợi ý nhập hàng tính cả món bán qua combo, trả hàng và huỷ hoá đơn', async () => {
+  const ke = (await post('/products', { name: 'Kẹp ống', unit: 'Cái', cost: 500, price: 1000, stock: 95 })).id;
+  const bo = (await post('/products', {
+    name: 'Bộ kẹp', unit: 'Bộ', price: 9000, is_combo: true, combo_items: [{ item_id: ke, qty: 10 }],
+  })).id;
+  // Bán 9 bộ = 90 cái kẹp, khách trả 1 bộ, thêm 1 hoá đơn 1 bộ bị huỷ -> bán thực 80 cái trong 30 ngày
+  const inv = await post('/invoices', { items: [{ product_id: bo, qty: 9, price: 9000 }], payments: [{ method: 'cash', amount: 81000 }] });
+  await post('/returns', { invoice_id: inv.id, items: [{ invoice_item_id: inv.items[0].id, qty: 1 }] });
+  const huy = await post('/invoices', { items: [{ product_id: bo, qty: 1, price: 9000 }], payments: [{ method: 'cash', amount: 9000 }] });
+  await post(`/invoices/${huy.id}/cancel`, {});
+  const r = await get('/reports/products?days=30');
+  const k = r.reorder.find((x) => x.id === ke);
+  assert.ok(k, 'kẹp còn 15 cái, bán 80 cái/30 ngày -> chỉ đủ bán 5 ngày, phải nằm trong danh sách');
+  assert.equal(k.stock, 15);
+  assert.equal(k.sold, 80);
+  assert.equal(k.suggest, 65); // 80/30 x 30 - 15
+  assert.ok(!r.slow.some((x) => x.id === ke));
+  assert.ok(!r.reorder.some((x) => x.id === bo), 'combo không tự nhập kho');
+});

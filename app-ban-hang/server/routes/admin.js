@@ -117,17 +117,18 @@ export function previousPeriod(db, from, to) {
 }
 
 // Hàng cần nhập thêm (tồn thấp hoặc sắp bán hết theo tốc độ bán) và hàng tồn lâu không bán.
-// Số lượng tính theo đơn vị gốc.
+// Số lượng tính theo đơn vị gốc. Số bán lấy từ thẻ kho để tính cả món bán qua combo;
+// hoá đơn huỷ và hàng khách trả đã cộng lại kho nên tự trừ ra.
 export function productAdvice(db, days) {
   const since = shiftDay(new Date().toLocaleDateString('sv'), -days + 1);
   const rows = db.prepare(`SELECT p.id, p.code, p.name, p.unit, p.stock, p.min_stock, p.cost, date(p.created_at) AS added,
-      COALESCE(s.sold, 0) AS sold, last.d AS last_sale
+      MAX(ROUND(COALESCE(s.sold, 0), 3), 0) AS sold, last.d AS last_sale
     FROM products p
-    LEFT JOIN (SELECT ii.product_id, SUM((ii.qty - ii.returned_qty) * ii.factor) AS sold FROM invoice_items ii
-      JOIN invoices i ON i.id = ii.invoice_id WHERE i.status = 'done' AND date(i.created_at) >= ? GROUP BY ii.product_id) s ON s.product_id = p.id
-    LEFT JOIN (SELECT ii.product_id, MAX(i.created_at) AS d FROM invoice_items ii
-      JOIN invoices i ON i.id = ii.invoice_id WHERE i.status = 'done' GROUP BY ii.product_id) last ON last.product_id = p.id
-    WHERE p.active = 1 AND p.track_stock = 1`).all(since);
+    LEFT JOIN (SELECT product_id, -SUM(qty) AS sold FROM stock_moves
+      WHERE kind IN ('sale','cancel','return') AND date(created_at) >= ? GROUP BY product_id) s ON s.product_id = p.id
+    LEFT JOIN (SELECT m.product_id, MAX(m.created_at) AS d FROM stock_moves m
+      JOIN invoices i ON i.id = m.ref_id AND i.status = 'done' WHERE m.kind = 'sale' GROUP BY m.product_id) last ON last.product_id = p.id
+    WHERE p.active = 1 AND p.track_stock = 1 AND p.is_combo = 0`).all(since);
   const reorder = [];
   const slow = [];
   let tooNew = 0;
