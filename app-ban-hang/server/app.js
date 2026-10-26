@@ -14,6 +14,7 @@ import adminRoutes, { getSettings } from './routes/admin.js';
 export function createApp(db, { dataDir, webDir }) {
   const imagesDir = path.join(dataDir, 'images');
   const backupDir = path.join(dataDir, 'backups');
+  const loginAttempts = new Map();
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '5mb' }));
@@ -42,8 +43,21 @@ export function createApp(db, { dataDir, webDir }) {
   });
 
   api.post('/login', (req, res) => {
-    const u = db.prepare('SELECT * FROM users WHERE username = ? AND active = 1').get(str(req.body.username, 50).toLowerCase());
-    if (!u || !checkPassword(req.body.password ?? '', u.pass_hash)) throw bad('Sai tên đăng nhập hoặc mật khẩu');
+    const username = str(req.body.username, 50).toLowerCase();
+    const key = `${req.ip}|${username}`;
+    const now = Date.now();
+    // Dọn các lần thử cũ để bộ nhớ không phình ra
+    if (loginAttempts.size > 1000) for (const [k, v] of loginAttempts) if (now - v.first >= 5 * 60 * 1000) loginAttempts.delete(k);
+    const old = loginAttempts.get(key);
+    if (old && now - old.first < 5 * 60 * 1000 && old.count >= 5) throw bad('Thử đăng nhập quá nhiều lần. Hãy đợi 5 phút rồi thử lại');
+    if (old && now - old.first >= 5 * 60 * 1000) loginAttempts.delete(key);
+    const u = db.prepare('SELECT * FROM users WHERE username = ? AND active = 1').get(username);
+    if (!u || !checkPassword(req.body.password ?? '', u.pass_hash)) {
+      const current = loginAttempts.get(key);
+      loginAttempts.set(key, current ? { first: current.first, count: current.count + 1 } : { first: now, count: 1 });
+      throw bad('Sai tên đăng nhập hoặc mật khẩu');
+    }
+    loginAttempts.delete(key);
     res.json({ token: createSession(db, u.id) });
   });
 

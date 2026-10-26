@@ -98,6 +98,7 @@ test('bán thiếu tiền: phải có khách, ghi nợ', async () => {
   const inv = await post('/invoices', { items, customer_id: cust.id, price_list_id: wholesale, payments: [{ method: 'cash', amount: 6000 }] }, staffToken);
   assert.equal(inv.debt, 30000);
   assert.equal((await get(`/customers/${cust.id}`)).debt, 30000);
+  await assert.rejects(post(`/customers/${cust.id}/pay`, { amount: 25000, discount: 6000 }, staffToken), /vượt công nợ/);
   await post(`/customers/${cust.id}/pay`, { amount: 10000, method: 'transfer' }, staffToken);
   assert.equal((await get(`/customers/${cust.id}`)).debt, 20000);
 });
@@ -141,6 +142,7 @@ test('nhập hàng: giá vốn bình quân, nợ nhà cung cấp', async () => {
   assert.equal(p.stock, 21);
   assert.equal(p.cost, 31048);
   assert.equal((await get('/suppliers'))[0].debt, 52000);
+  await assert.rejects(post(`/suppliers/${sup.id}/pay`, { amount: 52001 }), /vượt công nợ/);
 });
 
 test('báo cáo: doanh thu, lãi, dòng tiền', async () => {
@@ -165,4 +167,18 @@ test('sao lưu', async () => {
   const { name } = await post('/backups', {});
   assert.match(name, /^banhang-.*\.db$/);
   assert.equal((await get('/backups')).length, 1);
+});
+
+test('đăng nhập sai 5 lần thì phải đợi', async () => {
+  await post('/users', { username: 'nv9', name: 'Thử', password: 'nhanvien-9999' });
+  for (let i = 0; i < 5; i++) await assert.rejects(post('/login', { username: 'nv9', password: 'sai' }, null), /Sai/);
+  await assert.rejects(post('/login', { username: 'nv9', password: 'nhanvien-9999' }, null), /đợi 5 phút/);
+  // Tài khoản khác không bị ảnh hưởng
+  assert.ok((await post('/login', { username: 'nv1', password: 'nhanvien-1111' }, null)).token);
+});
+
+test('chặn tải ảnh từ địa chỉ trong nhà', async () => {
+  const { privateAddress } = await import('../routes/catalog.js');
+  for (const ip of ['127.0.0.1', '192.168.1.5', '10.0.0.1', '172.20.0.2', '169.254.169.254', '100.64.0.1', '::1', '::ffff:192.168.1.1', 'fd00::1', 'fe80::1']) assert.ok(privateAddress(ip), ip);
+  for (const ip of ['8.8.8.8', '113.161.1.1', '2001:4860::8888']) assert.ok(!privateAddress(ip), ip);
 });

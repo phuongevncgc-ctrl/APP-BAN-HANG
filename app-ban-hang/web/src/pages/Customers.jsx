@@ -40,12 +40,13 @@ function PayDebt({ customer, onClose, onDone }) {
   const [method, setMethod] = useState('cash');
   const [note, setNote] = useState('');
   const [run, busy] = useAction();
+  const over = amount + discount > customer.debt;
   const submit = async () => {
     if (await run(() => post(`/customers/${customer.id}/pay`, { amount, discount, method, note }), 'Đã thu nợ')) onDone();
   };
   return (
     <Modal title={`Thu nợ: ${customer.name}`} onClose={onClose}
-      footer={<button className="btn btn-success btn-lg btn-block" disabled={busy || !(amount + discount)} onClick={submit}>Thu {vnd(amount)}</button>}>
+      footer={<button className="btn btn-success btn-lg btn-block" disabled={busy || !(amount + discount) || over} onClick={submit}>Thu {vnd(amount)}</button>}>
       <div className="sumbox"><div className="row-between big"><span>Đang nợ</span><b className="neg">{money(customer.debt)}</b></div></div>
       <Field label="Số tiền thu"><MoneyInput autoFocus value={amount} onChange={setAmount} /></Field>
       <Field label="Chiết khấu (bớt cho khách)"><MoneyInput value={discount} onChange={setDiscount} /></Field>
@@ -53,6 +54,7 @@ function PayDebt({ customer, onClose, onDone }) {
         {['cash', 'transfer'].map((m) => <button key={m} className={method === m ? 'on' : ''} onClick={() => setMethod(m)}>{METHOD_NAMES[m]}</button>)}
       </div>
       <input className="input" placeholder="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} />
+      {over && <div className="warn">⚠️ Số thu + chiết khấu lớn hơn số khách đang nợ ({money(customer.debt)}).</div>}
       <div className="row-between"><span>Còn nợ sau khi thu</span><b>{money(customer.debt - amount - discount)}</b></div>
     </Modal>
   );

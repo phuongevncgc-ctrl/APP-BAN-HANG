@@ -24,7 +24,7 @@ export default function printRoutes(db) {
   });
 
   // Kiểm tra kết nối tới máy in (chưa cần lưu)
-  r.post('/printers/check', async (req, res) => {
+  r.post('/printers/check', requireOwner, async (req, res) => {
     const ip = String(req.body.ip ?? '').trim();
     if (!ip) throw bad('Chưa nhập địa chỉ IP');
     const started = Date.now();

@@ -133,6 +133,7 @@ export default function peopleRoutes(db) {
     const amount = money(req.body.amount);
     const discount = money(req.body.discount, 'Chiết khấu');
     if (!amount && !discount) throw bad('Chưa nhập số tiền');
+    if (c.debt <= 0 || amount + discount > c.debt) throw bad('Số tiền thu vượt công nợ hiện tại của khách');
     const method = METHODS.includes(req.body.method) ? req.body.method : 'cash';
     tx(db, () => {
       db.prepare('UPDATE customers SET debt = debt - ? WHERE id = ?').run(amount + discount, id);
@@ -174,6 +175,8 @@ export default function peopleRoutes(db) {
     if (!db.prepare('SELECT 1 FROM suppliers WHERE id = ?').get(id)) throw notFound();
     const amount = money(req.body.amount);
     if (!amount) throw bad('Chưa nhập số tiền');
+    const supplier = db.prepare('SELECT debt FROM suppliers WHERE id = ?').get(id);
+    if (supplier.debt <= 0 || amount > supplier.debt) throw bad('Số tiền trả vượt công nợ hiện tại của nhà cung cấp');
     const method = METHODS.includes(req.body.method) ? req.body.method : 'cash';
     tx(db, () => {
       db.prepare('UPDATE suppliers SET debt = debt - ? WHERE id = ?').run(amount, id);

@@ -87,6 +87,7 @@ export function readPrinters(list) {
     const ip = String(p.ip ?? '').trim();
     if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(ip) && !/^[a-z0-9.-]+$/i.test(ip)) throw bad(`"${name}": địa chỉ IP không đúng`);
     const port = Number(p.port) || 9100;
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw bad(`"${name}": cổng máy in không hợp lệ`);
     if (!['k80', 'k58', 'label'].includes(p.type)) throw bad(`"${name}": chưa chọn loại máy in`);
     const num = (v, def, min, max) => {
       const n = Number(v);

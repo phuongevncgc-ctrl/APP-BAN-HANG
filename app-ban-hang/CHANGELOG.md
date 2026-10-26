@@ -1,5 +1,15 @@
 # Nhật ký thay đổi
 
+## 1.0.0-rc.1.1
+
+- Đồng bộ version Add-on với bản RC1.1.
+- Chỉ chủ cửa hàng được kiểm tra máy in; giới hạn cổng máy in hợp lệ.
+- Chặn URL ảnh import không an toàn, địa chỉ nội bộ và redirect tuỳ ý.
+- Thêm giới hạn thử đăng nhập trong 5 phút.
+- Không cho thu nợ khách hoặc trả nợ nhà cung cấp vượt số dư hiện tại.
+- Màn Thu nợ / Trả nợ NCC báo ngay khi gõ số lớn hơn số đang nợ và khoá nút, không phải đợi máy báo lỗi.
+- Chặn thêm địa chỉ nội bộ khi tải ảnh (dạng ::ffff:, 100.64.x.x, fe80–febf). Bộ đếm đăng nhập sai tự dọn, không phình bộ nhớ.
+
 ## 1.0.0-beta.10
 
 - **Ô số lượng tự rộng ra** khi gõ số 3–4 chữ số (100, 1000, 12,5) — không còn bị mất số.

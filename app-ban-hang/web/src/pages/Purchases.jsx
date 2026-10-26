@@ -175,10 +175,11 @@ function PaySupplier({ supplier, onClose, onDone }) {
   const [run, busy] = useAction();
   return (
     <Modal title={`Trả nợ: ${supplier.name}`} onClose={onClose}
-      footer={<button className="btn btn-primary btn-lg btn-block" disabled={busy || !amount}
+      footer={<button className="btn btn-primary btn-lg btn-block" disabled={busy || !amount || amount > supplier.debt}
         onClick={async () => (await run(() => post(`/suppliers/${supplier.id}/pay`, { amount, method }), 'Đã trả nợ')) && onDone()}>Trả {vnd(amount)}</button>}>
       <div className="row-between big"><span>Đang nợ NCC</span><b className="neg">{money(supplier.debt)}</b></div>
       <Field label="Số tiền trả"><MoneyInput autoFocus value={amount} onChange={setAmount} /></Field>
+      {amount > supplier.debt && <div className="warn">⚠️ Số trả lớn hơn số đang nợ nhà cung cấp ({money(supplier.debt)}).</div>}
       <div className="seg">
         {['cash', 'transfer'].map((m) => <button key={m} className={method === m ? 'on' : ''} onClick={() => setMethod(m)}>{METHOD_NAMES[m]}</button>)}
       </div>

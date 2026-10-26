@@ -3,6 +3,8 @@ import express, { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import dns from 'node:dns/promises';
+import net from 'node:net';
 import { tx, nextCode, fold } from '../db.js';
 import { requireOwner, isOwner } from '../auth.js';
 import { moveStock } from './sales.js';
@@ -20,6 +22,34 @@ function saveImage(imagesDir, dataUrl) {
   return name;
 }
 
+export function privateAddress(address) {
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address);
+  if (mapped) address = mapped[1];
+  if (net.isIPv4(address)) {
+    const [a, b] = address.split('.').map(Number);
+    return a === 10 || a === 127 || a === 0 || a >= 224 || (a === 169 && b === 254) ||
+      (a === 100 && b >= 64 && b <= 127) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  }
+  if (net.isIPv6(address)) {
+    const x = address.toLowerCase();
+    return x === '::1' || x === '::' || /^fe[89ab]/.test(x) || x.startsWith('fc') || x.startsWith('fd') || x.startsWith('ff') || x.startsWith('::ffff:');
+  }
+  return true;
+}
+
+async function safeImageUrl(raw) {
+  let u;
+  try { u = new URL(String(raw)); } catch { return null; }
+  if (u.protocol !== 'https:' || u.username || u.password) return null;
+  const host = u.hostname.toLowerCase();
+  if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal')) return null;
+  try {
+    const addresses = await dns.lookup(host, { all: true });
+    if (!addresses.length || addresses.some((x) => privateAddress(x.address))) return null;
+  } catch { return null; }
+  return u.href;
+}
+
 // Tải ảnh hàng hoá từ link (ảnh KiotViet) về máy, chạy nền sau khi nhập file.
 async function downloadImages(db, imagesDir, jobs) {
   const queue = [...jobs];
@@ -27,7 +57,9 @@ async function downloadImages(db, imagesDir, jobs) {
     while (queue.length) {
       const { id, url } = queue.shift();
       try {
-        const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+        const safeUrl = await safeImageUrl(url);
+        if (!safeUrl) continue;
+        const res = await fetch(safeUrl, { redirect: 'error', signal: AbortSignal.timeout(15000) });
         const type = /image\/(jpeg|png|webp)/.exec(res.headers.get('content-type') ?? '')?.[1];
         if (!res.ok || !type) continue;
         const buf = Buffer.from(await res.arrayBuffer());
