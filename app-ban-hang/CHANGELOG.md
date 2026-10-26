@@ -1,5 +1,15 @@
 # Nhật ký thay đổi
 
+## 1.0.0-rc.2
+
+- **Báo cáo so sánh:** doanh thu, lợi nhuận hôm nay so với hôm trước (7 ngày so với 7 ngày trước...), có mũi tên ▲ tăng / ▼ giảm.
+- **Bán theo giờ:** biểu đồ giờ nào bán được nhiều nhất trong ngày.
+- **Khách mua nhiều** (top 10, kèm số đang nợ) và **doanh thu, lãi theo nhóm hàng**.
+- **Gợi ý nhập hàng** (Báo cáo → Gợi ý nhập hàng): hàng dưới tồn tối thiểu hoặc chỉ còn đủ bán dưới 7 ngày theo tốc độ bán, kèm số **nên nhập** cho đủ bán 30 ngày.
+- **Hàng bán chậm:** còn tồn mà 30 / 60 / 90 ngày qua không bán được, kèm số vốn đang nằm kho. Hàng mới thêm chưa đủ ngày thì chưa xét.
+- **Nhắc nợ qua Zalo:** trong trang khách hàng, bấm "📤 Nhắc nợ" để gửi tin nhắn báo số nợ, các hoá đơn còn nợ, số tài khoản và **mã QR chuyển khoản đúng số nợ**.
+- Danh sách "Đang nợ" xếp **khách nợ nhiều nhất lên đầu**, có ngày mua lần cuối.
+
 ## 1.0.0-rc.1.1
 
 - Đồng bộ version Add-on với bản RC1.1.

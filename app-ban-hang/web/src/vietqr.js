@@ -35,3 +35,35 @@ export function vietQrImage(opts) {
   qr.make();
   return qr.createDataURL(6, 4);
 }
+
+// Ngân hàng hay dùng: [mã BIN, tên]
+export const BANKS = [
+  ['970436', 'Vietcombank'], ['970415', 'VietinBank'], ['970418', 'BIDV'], ['970405', 'Agribank'], ['970407', 'Techcombank'],
+  ['970422', 'MB Bank'], ['970416', 'ACB'], ['970432', 'VPBank'], ['970403', 'Sacombank'], ['970423', 'TPBank'],
+  ['970441', 'VIB'], ['970443', 'SHB'], ['970437', 'HDBank'], ['970426', 'MSB'], ['970448', 'OCB'], ['970440', 'SeABank'],
+  ['970449', 'LPBank'], ['970431', 'Eximbank'], ['970428', 'Nam A Bank'], ['970409', 'Bac A Bank'],
+];
+
+export const bankName = (bin) => BANKS.find(([b]) => b === bin)?.[1] ?? '';
+
+// Gửi nội dung qua Zalo / tin nhắn: điện thoại thì mở bảng chia sẻ (kèm ảnh QR nếu được), máy tính thì chép vào bộ nhớ
+export async function shareText(text, qrDataUrl) {
+  if (navigator.share) {
+    try {
+      if (qrDataUrl && navigator.canShare) {
+        const blob = await (await fetch(qrDataUrl)).blob();
+        const file = new File([blob], 'ma-qr-chuyen-khoan.gif', { type: blob.type });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ text, files: [file] });
+          return;
+        }
+      }
+      await navigator.share({ text });
+    } catch {
+      /* người dùng huỷ */
+    }
+  } else {
+    await navigator.clipboard?.writeText(text);
+    alert('Đã chép nội dung. Mở Zalo và dán để gửi cho khách.');
+  }
+}

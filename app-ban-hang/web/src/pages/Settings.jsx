@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BANKS } from '../vietqr.js';
 import { get, post, put, setToken, getToken, downloadUrl } from '../api.js';
 import { money, vnd } from '../format.js';
 import { Field, Loading, Modal, useAction, useLoad, confirmAsk } from '../components/ui.jsx';
@@ -118,12 +119,6 @@ function Printers() {
 }
 
 // Mã BIN ngân hàng cho VietQR
-const BANKS = [
-  ['970436', 'Vietcombank'], ['970415', 'VietinBank'], ['970418', 'BIDV'], ['970405', 'Agribank'], ['970407', 'Techcombank'],
-  ['970422', 'MB Bank'], ['970416', 'ACB'], ['970432', 'VPBank'], ['970403', 'Sacombank'], ['970423', 'TPBank'],
-  ['970441', 'VIB'], ['970443', 'SHB'], ['970437', 'HDBank'], ['970426', 'MSB'], ['970448', 'OCB'], ['970440', 'SeABank'],
-  ['970449', 'LPBank'], ['970431', 'Eximbank'], ['970428', 'Nam A Bank'], ['970409', 'Bac A Bank'],
-];
 
 function ShopSettings({ reloadSettings }) {
   const settings = useSettings();

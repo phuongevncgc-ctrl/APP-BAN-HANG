@@ -64,15 +64,92 @@ export function report(db, from, to) {
     LEFT JOIN users u ON u.id = i.user_id WHERE i.status = 'done' AND date(i.created_at) BETWEEN ? AND ?
     GROUP BY i.user_id ORDER BY total DESC`).all(from, to);
 
+  // Doanh thu theo giờ trong ngày (gộp cả kỳ) để biết giờ nào đông khách
+  const byHour = db.prepare(`SELECT CAST(strftime('%H', created_at) AS INTEGER) AS hour, COUNT(*) AS count, SUM(total) AS total
+    FROM invoices WHERE status = 'done' AND date(created_at) BETWEEN ? AND ? GROUP BY hour ORDER BY hour`).all(from, to);
+
+  const topCustomers = db.prepare(`SELECT c.id, c.name, c.debt, COUNT(*) AS count, SUM(i.total) AS total FROM invoices i
+    JOIN customers c ON c.id = i.customer_id WHERE i.status = 'done' AND date(i.created_at) BETWEEN ? AND ?
+    GROUP BY c.id ORDER BY total DESC LIMIT 10`).all(from, to);
+
+  const byCategory = db.prepare(`SELECT COALESCE(cat.name, 'Chưa phân nhóm') AS name,
+      SUM(ROUND(ii.total * (CAST(i.total AS REAL) / MAX(i.subtotal,1)) * (ii.qty - ii.returned_qty) / ii.qty)) AS revenue,
+      SUM(ROUND((ii.total * (CAST(i.total AS REAL) / MAX(i.subtotal,1)) - ii.qty * ii.cost) * (ii.qty - ii.returned_qty) / ii.qty)) AS profit
+    FROM invoice_items ii JOIN invoices i ON i.id = ii.invoice_id LEFT JOIN products p ON p.id = ii.product_id
+    LEFT JOIN categories cat ON cat.id = p.category_id
+    WHERE i.status = 'done' AND date(i.created_at) BETWEEN ? AND ? AND ii.qty > 0
+    GROUP BY cat.id ORDER BY revenue DESC LIMIT 15`).all(from, to);
+
   return {
     from, to,
     sales, returns, revenue, cost, profit: revenue - cost,
+    byHour, topCustomers, byCategory,
     expenses, otherIncome, netProfit: revenue - cost - expenses + otherIncome,
     byDay, topProducts, cashflow, methods, byUser,
     customerDebt: db.prepare('SELECT COALESCE(SUM(debt),0) AS s FROM customers WHERE active = 1').get().s,
     supplierDebt: db.prepare('SELECT COALESCE(SUM(debt),0) AS s FROM suppliers WHERE active = 1').get().s,
     stockValue: Math.round(db.prepare('SELECT COALESCE(SUM(MAX(stock,0) * cost),0) AS s FROM products WHERE active = 1 AND track_stock = 1').get().s),
     lowStock: db.prepare('SELECT COUNT(*) AS n FROM products WHERE active = 1 AND track_stock = 1 AND stock <= min_stock').get().n,
+  };
+}
+
+const shiftDay = (d, n) => {
+  const x = new Date(`${d}T00:00:00Z`);
+  x.setUTCDate(x.getUTCDate() + n);
+  return x.toISOString().slice(0, 10);
+};
+
+// Kỳ trước cùng độ dài (hôm nay so với hôm qua, 7 ngày so với 7 ngày trước) để so sánh tăng giảm
+export function previousPeriod(db, from, to) {
+  const len = Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1;
+  const pFrom = shiftDay(from, -len);
+  const pTo = shiftDay(from, -1);
+  const s = db.prepare(`SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total FROM invoices
+    WHERE status = 'done' AND date(created_at) BETWEEN ? AND ?`).get(pFrom, pTo);
+  const cost = db.prepare(`SELECT COALESCE(SUM(ii.qty * ii.cost),0) AS s FROM invoice_items ii
+    JOIN invoices i ON i.id = ii.invoice_id WHERE i.status = 'done' AND date(i.created_at) BETWEEN ? AND ?`).get(pFrom, pTo).s;
+  const ret = db.prepare(`SELECT COALESCE(SUM(r.total),0) AS total,
+      COALESCE((SELECT SUM(ri.qty * ri.cost) FROM return_items ri JOIN returns r2 ON r2.id = ri.return_id
+        WHERE date(r2.created_at) BETWEEN ? AND ?),0) AS cost
+    FROM returns r WHERE date(r.created_at) BETWEEN ? AND ?`).get(pFrom, pTo, pFrom, pTo);
+  const revenue = s.total - ret.total;
+  return { from: pFrom, to: pTo, count: s.count, revenue, profit: Math.round(revenue - cost + ret.cost) };
+}
+
+// Hàng cần nhập thêm (tồn thấp hoặc sắp bán hết theo tốc độ bán) và hàng tồn lâu không bán.
+// Số lượng tính theo đơn vị gốc.
+export function productAdvice(db, days) {
+  const since = shiftDay(new Date().toLocaleDateString('sv'), -days + 1);
+  const rows = db.prepare(`SELECT p.id, p.code, p.name, p.unit, p.stock, p.min_stock, p.cost, date(p.created_at) AS added,
+      COALESCE(s.sold, 0) AS sold, last.d AS last_sale
+    FROM products p
+    LEFT JOIN (SELECT ii.product_id, SUM((ii.qty - ii.returned_qty) * ii.factor) AS sold FROM invoice_items ii
+      JOIN invoices i ON i.id = ii.invoice_id WHERE i.status = 'done' AND date(i.created_at) >= ? GROUP BY ii.product_id) s ON s.product_id = p.id
+    LEFT JOIN (SELECT ii.product_id, MAX(i.created_at) AS d FROM invoice_items ii
+      JOIN invoices i ON i.id = ii.invoice_id WHERE i.status = 'done' GROUP BY ii.product_id) last ON last.product_id = p.id
+    WHERE p.active = 1 AND p.track_stock = 1`).all(since);
+  const reorder = [];
+  const slow = [];
+  let tooNew = 0;
+  for (const r of rows) {
+    const perDay = r.sold / days;
+    const cover = perDay > 0 ? Math.max(r.stock, 0) / perDay : null; // còn bán được bao nhiêu ngày
+    if ((r.min_stock > 0 && r.stock <= r.min_stock) || (cover !== null && cover < 7)) {
+      // Đủ bán thêm 30 ngày và không thấp hơn tồn tối thiểu
+      const need = Math.max(1, Math.ceil(perDay * 30 + r.min_stock - r.stock));
+      reorder.push({ ...r, per_day: Math.round(perDay * 100) / 100, cover_days: cover === null ? null : Math.floor(cover), suggest: need });
+    } else if (r.stock > 0 && r.sold <= 0) {
+      // Hàng mới thêm (vd vừa nhập từ KiotViet) chưa đủ ngày để biết bán chậm hay không
+      if (r.added > since) { tooNew++; continue; }
+      slow.push({ ...r, value: Math.round(r.stock * r.cost) });
+    }
+  }
+  reorder.sort((a, b) => (a.cover_days ?? 1e9) - (b.cover_days ?? 1e9) || b.per_day - a.per_day || a.stock - b.stock);
+  slow.sort((a, b) => b.value - a.value);
+  return {
+    days,
+    reorder: reorder.slice(0, 500), reorderCount: reorder.length,
+    slow: slow.slice(0, 500), slowCount: slow.length, tooNew, slowValue: slow.reduce((s, x) => s + x.value, 0),
   };
 }
 
@@ -158,7 +235,14 @@ export default function adminRoutes(db, { backupDir }) {
 
   r.get('/reports/summary', requireOwner, (req, res) => {
     const today = new Date().toLocaleDateString('sv');
-    res.json(report(db, day(req.query.from, today), day(req.query.to, today)));
+    const from = day(req.query.from, today);
+    const to = day(req.query.to, today);
+    res.json({ ...report(db, from, to), previous: previousPeriod(db, from, to) });
+  });
+
+  // Gợi ý nhập hàng và hàng bán chậm
+  r.get('/reports/products', requireOwner, (req, res) => {
+    res.json(productAdvice(db, Math.min(Math.max(Number(req.query.days) || 30, 7), 365)));
   });
 
   // Báo cáo cuối ngày cho nhân viên: chỉ tiền thu, không có lãi.

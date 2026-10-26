@@ -12,11 +12,13 @@ export default function peopleRoutes(db) {
   r.get('/customers', (req, res) => {
     const q = fold(req.query.q);
     const raw = str(req.query.q, 50);
+    const byDebt = req.query.sort === 'debt';
     const rows = db.prepare(`SELECT c.id, c.code, c.name, c.phone, c.address, c.debt, c.price_list_id, pl.name AS price_list_name
+        ${byDebt ? ", (SELECT MAX(created_at) FROM invoices WHERE customer_id = c.id AND status = 'done') AS last_buy" : ''}
       FROM customers c LEFT JOIN price_lists pl ON pl.id = c.price_list_id
       WHERE c.active = 1 AND (? = '' OR c.search LIKE ? OR c.phone LIKE ? OR c.code LIKE ?)
         AND (? = '0' OR c.debt != 0)
-      ORDER BY c.name COLLATE NOCASE LIMIT ${Math.min(Number(req.query.limit) || 300, 20000)}`)
+      ORDER BY ${byDebt ? 'c.debt DESC,' : ''} c.name COLLATE NOCASE LIMIT ${Math.min(Number(req.query.limit) || 300, 20000)}`)
       .all(q, `%${q}%`, `%${raw}%`, `%${raw}%`, req.query.debt === '1' ? '1' : '0');
     res.json(rows);
   });

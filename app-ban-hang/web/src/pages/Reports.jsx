@@ -37,6 +37,104 @@ function DayBars({ rows }) {
   );
 }
 
+// So với kỳ trước: ▲ 12% / ▼ 5%
+function change(cur, prev, label) {
+  if (!prev) return cur ? `${label}: chưa có` : '';
+  const pct = Math.round(((cur - prev) / Math.abs(prev)) * 100);
+  return `${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct)}% so với ${label}`;
+}
+
+function HourBars({ rows }) {
+  if (!rows.length) return null;
+  const from = Math.min(7, ...rows.map((r) => r.hour));
+  const to = Math.max(20, ...rows.map((r) => r.hour));
+  const byHour = Object.fromEntries(rows.map((r) => [r.hour, r]));
+  const max = Math.max(1, ...rows.map((r) => r.total));
+  const hours = Array.from({ length: to - from + 1 }, (_, i) => from + i);
+  const best = rows.reduce((a, b) => (b.total > a.total ? b : a));
+  return (
+    <div className="card">
+      <h4>Bán theo giờ <small className="muted">· đông nhất {best.hour}h–{best.hour + 1}h</small></h4>
+      <div className="hour-bars">
+        {hours.map((h) => (
+          <div key={h} className="hour-col" title={`${h}h: ${byHour[h]?.count ?? 0} hoá đơn, ${money(byHour[h]?.total ?? 0)}`}>
+            <div className="hour-bar" style={{ height: `${((byHour[h]?.total ?? 0) / max) * 100}%` }} />
+            <small>{h}</small>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Gợi ý nhập hàng theo tốc độ bán, và hàng tồn lâu không bán (vốn nằm kho)
+function GoodsAdvice() {
+  const [days, setDays] = useState(30);
+  const [tab, setTab] = useState('reorder');
+  const state = useLoad(() => get(`/reports/products?days=${days}`), [days]);
+  return (
+    <>
+      <div className="chips">
+        {[30, 60, 90].map((d) => <button key={d} className={`chip ${days === d ? 'chip-on' : ''}`} onClick={() => setDays(d)}>{d} ngày qua</button>)}
+      </div>
+      <Loading state={state}>
+        {(r) => (
+          <>
+            <div className="seg">
+              <button className={tab === 'reorder' ? 'on' : ''} onClick={() => setTab('reorder')}>Cần nhập thêm ({num(r.reorderCount)})</button>
+              <button className={tab === 'slow' ? 'on' : ''} onClick={() => setTab('slow')}>Bán chậm ({num(r.slowCount)})</button>
+            </div>
+            {tab === 'reorder' ? (
+              <>
+                <p className="muted small">Hàng dưới tồn tối thiểu, hoặc theo tốc độ bán {days} ngày qua chỉ còn đủ bán dưới 7 ngày. "Nên nhập" là đủ bán thêm khoảng 30 ngày.</p>
+                <div className="table-scroll">
+                  <table className="table">
+                    <thead><tr><th>Hàng hoá</th><th className="r">Tồn</th><th className="r">Bán/ngày</th><th className="r">Đủ bán</th><th className="r">Nên nhập</th></tr></thead>
+                    <tbody>
+                      {r.reorder.length === 0 && <tr><td colSpan={5} className="empty">Chưa có hàng nào cần nhập</td></tr>}
+                      {r.reorder.map((x) => (
+                        <tr key={x.id}>
+                          <td>{x.name}<small className="muted block">{x.code}{x.unit && ` · ${x.unit}`}{x.min_stock > 0 && ` · tối thiểu ${num(x.min_stock)}`}</small></td>
+                          <td className={`r ${x.stock <= 0 ? 'neg' : ''}`}>{num(x.stock)}</td>
+                          <td className="r">{x.per_day ? num(x.per_day) : '—'}</td>
+                          <td className={`r ${x.cover_days !== null && x.cover_days < 3 ? 'neg' : ''}`}>{x.cover_days === null ? '—' : `${x.cover_days} ngày`}</td>
+                          <td className="r"><b>{num(x.suggest)}</b></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="muted small">Hàng còn tồn nhưng {days} ngày qua không bán được cái nào. Tổng vốn đang nằm kho: <b>{money(r.slowValue)}</b>.
+                  {r.tooNew > 0 && ` Có ${num(r.tooNew)} hàng mới thêm chưa đủ ${days} ngày nên chưa xét.`}</p>
+                <div className="table-scroll">
+                  <table className="table">
+                    <thead><tr><th>Hàng hoá</th><th className="r">Tồn</th><th className="r">Vốn</th><th className="r">Bán lần cuối</th></tr></thead>
+                    <tbody>
+                      {r.slow.length === 0 && <tr><td colSpan={4} className="empty">Không có hàng bán chậm</td></tr>}
+                      {r.slow.map((x) => (
+                        <tr key={x.id}>
+                          <td>{x.name}<small className="muted block">{x.code}{x.unit && ` · ${x.unit}`}</small></td>
+                          <td className="r">{num(x.stock)}</td>
+                          <td className="r">{money(x.value)}</td>
+                          <td className="r">{x.last_sale ? dateOnly(x.last_sale) : 'Chưa bán'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+            {(tab === 'reorder' ? r.reorderCount : r.slowCount) > 500 && <p className="muted small">Hiện 500 hàng đầu.</p>}
+          </>
+        )}
+      </Loading>
+    </>
+  );
+}
+
 // Xuất nhập tồn theo kỳ, số lượng theo ĐVT gốc
 function StockReport({ range }) {
   const [q, setQ] = useState('');
@@ -95,16 +193,20 @@ export default function Reports() {
         <div className="seg">
           <button className={tab === 'summary' ? 'on' : ''} onClick={() => setTab('summary')}>Tổng quan</button>
           <button className={tab === 'stock' ? 'on' : ''} onClick={() => setTab('stock')}>Xuất nhập tồn</button>
+          <button className={tab === 'goods' ? 'on' : ''} onClick={() => setTab('goods')}>Gợi ý nhập hàng</button>
         </div>
       </div>
-      <DateRange from={range[0]} to={range[1]} onChange={(f, t) => setRange([f, t])} />
+      {tab !== 'goods' && <DateRange from={range[0]} to={range[1]} onChange={(f, t) => setRange([f, t])} />}
       {tab === 'stock' && <StockReport range={range} />}
+      {tab === 'goods' && <GoodsAdvice />}
       {tab === 'summary' && <Loading state={state}>
-        {(r) => (
+        {(r) => {
+          const prevLabel = r.from === r.to ? 'hôm trước' : 'kỳ trước';
+          return (
           <>
             <div className="cards">
-              <Stat label="Doanh thu" value={money(r.revenue)} sub={`${r.sales.count} hoá đơn`} onClick={() => go('hoa-don')} />
-              <Stat label="Lợi nhuận" value={money(r.profit)} tone={r.profit < 0 ? 'neg' : 'pos'} sub={r.revenue ? `${Math.round((r.profit / r.revenue) * 100)}% doanh thu` : ''} />
+              <Stat label="Doanh thu" value={money(r.revenue)} sub={<>{r.sales.count} hoá đơn<br />{change(r.revenue, r.previous.revenue, prevLabel)}</>} onClick={() => go('hoa-don')} />
+              <Stat label="Lợi nhuận" value={money(r.profit)} tone={r.profit < 0 ? 'neg' : 'pos'} sub={<>{r.revenue ? `${Math.round((r.profit / r.revenue) * 100)}% doanh thu` : ''}<br />{change(r.profit, r.previous.profit, prevLabel)}</>} />
               <Stat label="Trả hàng" value={money(r.returns.total)} sub={`${r.returns.count} phiếu`} />
               <Stat label="Giảm giá HĐ" value={money(r.sales.discount)} />
               {(r.expenses > 0 || r.otherIncome > 0) && <Stat label="Chi phí (sổ quỹ)" value={money(r.expenses)} sub={r.otherIncome ? `Thu khác ${money(r.otherIncome)}` : ''} onClick={() => go('thu-chi')} />}
@@ -126,6 +228,7 @@ export default function Reports() {
               <Stat label="Hàng sắp hết" value={num(r.lowStock)} tone={r.lowStock ? 'neg' : ''} onClick={() => go('hang-hoa')} />
             </div>
             <DayBars rows={r.byDay} />
+            <HourBars rows={r.byHour} />
             {r.topProducts.length > 0 && (
               <div className="card">
                 <h4>Hàng bán chạy</h4>
@@ -146,6 +249,24 @@ export default function Reports() {
                 </div>
               </div>
             )}
+            {r.topCustomers.length > 0 && (
+              <div className="card">
+                <h4>Khách mua nhiều</h4>
+                {r.topCustomers.map((c) => (
+                  <a key={c.id} className="row-between" href={`#/khach-hang/${c.id}`}>
+                    <span>{c.name} <small className="muted">({c.count} HĐ{c.debt > 0 ? `, nợ ${money(c.debt)}` : ''})</small></span><b>{money(c.total)}</b>
+                  </a>
+                ))}
+              </div>
+            )}
+            {r.byCategory.length > 1 && (
+              <div className="card">
+                <h4>Theo nhóm hàng</h4>
+                {r.byCategory.map((c) => (
+                  <div key={c.name} className="row-between"><span>{c.name}</span><span><b>{money(c.revenue)}</b> <small className={c.profit < 0 ? 'neg' : 'muted'}>lãi {money(c.profit)}</small></span></div>
+                ))}
+              </div>
+            )}
             {r.byUser.length > 1 && (
               <div className="card">
                 <h4>Theo nhân viên</h4>
@@ -164,7 +285,8 @@ export default function Reports() {
               </details>
             )}
           </>
-        )}
+          );
+        }}
       </Loading>}
     </div>
   );

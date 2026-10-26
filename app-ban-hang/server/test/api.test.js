@@ -182,3 +182,27 @@ test('chặn tải ảnh từ địa chỉ trong nhà', async () => {
   for (const ip of ['127.0.0.1', '192.168.1.5', '10.0.0.1', '172.20.0.2', '169.254.169.254', '100.64.0.1', '::1', '::ffff:192.168.1.1', 'fd00::1', 'fe80::1']) assert.ok(privateAddress(ip), ip);
   for (const ip of ['8.8.8.8', '113.161.1.1', '2001:4860::8888']) assert.ok(!privateAddress(ip), ip);
 });
+
+test('báo cáo: so với kỳ trước, theo giờ, gợi ý nhập hàng, hàng bán chậm', async () => {
+  const r = await get(`/reports/summary?from=${today}&to=${today}`);
+  assert.ok(r.previous && typeof r.previous.revenue === 'number');
+  assert.ok(r.byHour.length >= 1 && r.byHour.every((h) => h.hour >= 0 && h.hour < 24));
+  assert.ok(Array.isArray(r.topCustomers) && Array.isArray(r.byCategory));
+  const fast = await post('/products', { name: 'Hàng bán nhanh', price: 1000, cost: 500, stock: 50, min_stock: 0 });
+  const dead = await post('/products', { name: 'Hàng nằm kho', price: 1000, cost: 700, stock: 10 });
+  await post('/invoices', { items: [{ product_id: fast.id, qty: 45, price: 1000 }], payments: [{ method: 'cash', amount: 45000 }] });
+  const a = await get('/reports/products?days=30');
+  const f = a.reorder.find((x) => x.id === fast.id);
+  assert.ok(f, 'hàng bán nhanh phải nằm trong danh sách cần nhập');
+  assert.equal(f.stock, 5);
+  assert.equal(f.suggest, 40); // 1,5 cái/ngày x 30 ngày - 5 còn lại
+  assert.ok(f.suggest >= 1);
+  // Hàng vừa thêm hôm nay chưa đủ 30 ngày nên chưa tính là bán chậm
+  assert.ok(!a.slow.some((x) => x.id === dead.id) && a.tooNew >= 1);
+  db.prepare("UPDATE products SET created_at = datetime('now', '-40 days') WHERE id = ?").run(dead.id);
+  const d = (await get('/reports/products?days=30')).slow.find((x) => x.id === dead.id);
+  assert.equal(d.value, 7000);
+  await assert.rejects(get('/reports/products', staffToken), /chủ/i);
+  const owing = await get('/customers?debt=1&sort=debt');
+  assert.ok(owing.every((c, i) => i === 0 || owing[i - 1].debt >= c.debt));
+});

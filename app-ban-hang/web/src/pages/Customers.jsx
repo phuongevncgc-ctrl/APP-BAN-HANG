@@ -4,7 +4,28 @@ import Ledger from '../components/Ledger.jsx';
 import ImportDialog from '../components/ImportDialog.jsx';
 import { money, num, vnd, dateTime, dateOnly, METHOD_NAMES } from '../format.js';
 import { Field, Loading, Modal, MoneyInput, useAction, useLoad, useDebounced, confirmAsk } from '../components/ui.jsx';
-import { useUser, isOwner, go } from '../App.jsx';
+import { useUser, isOwner, go, useSettings } from '../App.jsx';
+import { vietQrImage, bankName, shareText } from '../vietqr.js';
+
+// Tin nhắn nhắc nợ gửi khách qua Zalo: tổng nợ, các hoá đơn còn nợ, số tài khoản + mã QR đúng số tiền
+function remindDebt(c, settings) {
+  const lines = [
+    `Kính gửi ${c.name},`,
+    `${settings.shop_name || 'Cửa hàng'} xin thông báo số tiền còn nợ đến ngày ${new Date().toLocaleDateString('vi-VN')}: ${vnd(c.debt)}.`,
+  ];
+  if (c.debt_invoices.length) {
+    lines.push('', 'Chi tiết:');
+    for (const d of c.debt_invoices.slice(-15)) lines.push(`- ${d.code} ngày ${dateOnly(d.created_at)}: ${vnd(d.owing)}`);
+  }
+  let qr = null;
+  if (settings.bank_bin && settings.bank_account) {
+    lines.push('', `Chuyển khoản: ${bankName(settings.bank_bin)} ${settings.bank_account}${settings.bank_holder ? ` - ${settings.bank_holder}` : ''}`);
+    qr = vietQrImage({ bin: settings.bank_bin, account: settings.bank_account, amount: c.debt, info: `${c.code || ''} tra no`.trim() });
+  }
+  if (settings.shop_phone) lines.push(`Liên hệ: ${settings.shop_phone}`);
+  lines.push('', 'Xin cảm ơn quý khách!');
+  return shareText(lines.join('\n'), qr);
+}
 
 function CustomerForm({ customer, priceLists, onClose, onSaved }) {
   const [f, setF] = useState(customer ?? { name: '', phone: '', address: '', tax_code: '', note: '', price_list_id: '' });
@@ -62,6 +83,7 @@ function PayDebt({ customer, onClose, onDone }) {
 
 function CustomerDetail({ id, priceLists, onClose, onChanged }) {
   const owner = isOwner(useUser());
+  const settings = useSettings();
   const state = useLoad(() => get(`/customers/${id}`), [id]);
   const [editing, setEditing] = useState(false);
   const [paying, setPaying] = useState(false);
@@ -81,11 +103,12 @@ function CustomerDetail({ id, priceLists, onClose, onChanged }) {
             {c.price_list_name && <div>Bảng giá: <b>{c.price_list_name}</b></div>}
             <div className="cards">
               <div className="card stat"><small>Đang nợ</small><b className={c.debt > 0 ? 'neg' : ''}>{money(c.debt)}</b></div>
-              <div className="card stat"><small>Nợ lâu nhất</small><b>{c.debt > 0 ? `${c.max_debt_age} ngày` : '—'}</b></div>
+              <div className="card stat"><small>Nợ lâu nhất</small><b>{c.debt > 0 && c.debt_invoices.length ? `${c.max_debt_age} ngày` : '—'}</b></div>
               <div className="card stat"><small>Tổng mua</small><b>{money(c.total_bought - c.total_returned)}</b></div>
             </div>
             <div className="row gap wrap">
               {c.debt > 0 && <button className="btn btn-success grow" onClick={() => setPaying(true)}>💰 Thu nợ</button>}
+              {c.debt > 0 && <button className="btn grow" onClick={() => remindDebt(c, settings)}>📤 Nhắc nợ</button>}
               <button className="btn grow" onClick={() => setEditing(true)}>✎ Sửa</button>
               {owner && <button className="btn btn-danger" onClick={async () => { if (confirmAsk('Xoá khách này?') && (await run(() => del(`/customers/${id}`), 'Đã xoá'))) { onChanged(); onClose(); } }}>Xoá</button>}
             </div>
@@ -152,7 +175,7 @@ export default function Customers({ route }) {
   const dq = useDebounced(q);
   const [limit, setLimit] = useState(PAGE);
   useEffect(() => setLimit(PAGE), [dq, debtOnly]);
-  const list = useLoad(() => get(`/customers?q=${encodeURIComponent(dq)}&debt=${debtOnly ? 1 : 0}&limit=${limit}`), [dq, debtOnly, limit]);
+  const list = useLoad(() => get(`/customers?q=${encodeURIComponent(dq)}&debt=${debtOnly ? 1 : 0}&sort=${debtOnly ? 'debt' : ''}&limit=${limit}`), [dq, debtOnly, limit]);
   const stats = useLoad(() => get('/customers/stats'), [list.data]);
   const pls = useLoad(() => get('/price-lists'), []);
   const openId = route[1] ? Number(route[1]) : null;
@@ -169,7 +192,7 @@ export default function Customers({ route }) {
       <input className="input" placeholder="🔍 Tên, số điện thoại" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="chips">
         <button className={`chip ${!debtOnly ? 'chip-on' : ''}`} onClick={() => setDebtOnly(false)}>Tất cả</button>
-        <button className={`chip ${debtOnly ? 'chip-on' : ''}`} onClick={() => setDebtOnly(true)}>Đang nợ</button>
+        <button className={`chip ${debtOnly ? 'chip-on' : ''}`} onClick={() => setDebtOnly(true)}>Đang nợ (nhiều nhất trước)</button>
       </div>
       <Loading state={list}>
         {(rows) => (
@@ -183,7 +206,7 @@ export default function Customers({ route }) {
                 <button key={c.id} className="list-item" onClick={() => go(`khach-hang/${c.id}`)}>
                   <span className="grow">
                     <b>{c.name}</b>
-                    <small className="muted block">{c.phone || c.code}{c.price_list_name ? ` · ${c.price_list_name}` : ''}</small>
+                    <small className="muted block">{c.phone || c.code}{c.price_list_name ? ` · ${c.price_list_name}` : ''}{c.debt > 0 && c.last_buy ? ` · mua lần cuối ${dateOnly(c.last_buy)}` : ''}</small>
                   </span>
                   {c.debt !== 0 && <b className={c.debt > 0 ? 'neg' : 'pos'}>{money(c.debt)}</b>}
                 </button>
