@@ -366,3 +366,10 @@ details summary { cursor: pointer; font-weight: 600; min-height: 32px; }
   body.typing .bottombar { display: none; }
   body.typing .pos-bar { bottom: 0; }
 }
+
+/* PSell V1 preview: scrollable, never commits data merely by opening */
+.psell-preview { overflow: auto; max-height: 65vh; background: #eaf0f0; padding: 12px; border-radius: 10px; }
+.psell-preview .a4 { background: white; color: #172b24; padding: 18px; margin: 0 auto; min-width: 550px; max-width: 790px; box-shadow: 0 2px 12px #0002; }
+.psell-preview-overlay { position: fixed; z-index: 9999; inset: 0; background: #0009; display: grid; place-items: center; padding: 14px; }
+.psell-preview-dialog { background: white; color: #152b23; border-radius: 12px; padding: 16px; width: min(940px, 100%); max-height: 95vh; overflow: auto; }
+@media(max-width:650px) { .psell-preview .a4 { transform-origin: top left; font-size: 11px; } }

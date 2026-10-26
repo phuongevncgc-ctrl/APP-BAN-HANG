@@ -16,7 +16,7 @@ export function ReceiptBody({ inv, settings }) {
   const cashPaid = inv.payments.filter((p) => p.amount > 0).reduce((s, p) => s + p.amount, 0) + inv.change_amount;
   return (
     <div className="receipt" style={{ width: settings.receipt_width === '58' ? '54mm' : '76mm' }}>
-      <div className="r-center r-shop">{settings.shop_name}</div>
+      <div className="r-center"><img src="/psell-logo.svg" alt="PSell" style={{ width: 36, height: 36 }} /></div><div className="r-center r-shop">{settings.shop_name}</div>
       {settings.shop_address && <div className="r-center">{settings.shop_address}</div>}
       {settings.shop_phone && <div className="r-center">ĐT: {settings.shop_phone}</div>}
       <div className="r-center r-title">PHIẾU BÁN HÀNG</div>
@@ -172,6 +172,7 @@ export function useReceiptPrint() {
 export function ReceiptActions({ inv, onDone }) {
   const settings = useSettings();
   const [printReceipt, portal, print] = useReceiptPrint();
+  const [preview, setPreview] = useState(false);
   const share = async () => {
     const text = shareText(inv, settings);
     if (navigator.share) {
@@ -188,11 +189,13 @@ export function ReceiptActions({ inv, onDone }) {
   return (
     <>
       <div className="receipt-actions">
+        <button className="btn" onClick={() => setPreview(true)}>👁 Xem trước</button>
         <button className="btn btn-primary" onClick={() => printReceipt(inv)}>🖨️ In hoá đơn</button>
         <button className="btn" onClick={() => print(<InvoiceA4 inv={inv} settings={settings} />)}>📄 In A4</button>
         <button className="btn" onClick={share}>📤 Gửi Zalo</button>
         {onDone && <button className="btn" onClick={onDone}>🧾 Đơn mới</button>}
       </div>
+      {preview && <div className="psell-preview-overlay" role="dialog" aria-modal="true" aria-label="Xem trước hóa đơn"><div className="psell-preview-dialog"><div className="row gap" style={{ marginBottom: 12 }}><b className="grow">Xem trước hóa đơn {inv.code}</b><button className="btn" onClick={() => setPreview(false)}>Đóng</button><button className="btn btn-primary" onClick={() => print(<InvoiceA4 inv={inv} settings={settings} />)}>In A4</button></div><div className="psell-preview"><InvoiceA4 inv={inv} settings={settings} /></div></div></div>}
       {portal}
     </>
   );

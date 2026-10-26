@@ -336,6 +336,14 @@ const SCHEMA = [
   CREATE UNIQUE INDEX suppliers_code ON suppliers(code);
   CREATE INDEX customers_phone ON customers(phone);
   `,
+  // v5: chặn gửi lại cùng yêu cầu bán hàng (mạng chập chờn, bấm hai lần).
+  `
+  CREATE TABLE invoice_requests (
+    request_key TEXT PRIMARY KEY,
+    payload_hash TEXT NOT NULL,
+    invoice_id INTEGER NOT NULL UNIQUE REFERENCES invoices(id)
+  );
+  `,
 ];
 
 export function openDb(file) {
