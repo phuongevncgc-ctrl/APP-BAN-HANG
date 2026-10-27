@@ -5,6 +5,8 @@ import { tx, nextCode } from '../db.js';
 import { requireOwner, isOwner } from '../auth.js';
 import { bad, notFound, money, qty as toQty, str, idOrNull, payments, day, METHODS } from '../util.js';
 
+const vnd = (n) => `${Math.round(n).toLocaleString('vi-VN')}đ`;
+
 // Thay đổi tồn kho và ghi lịch sử. Hàng không theo dõi tồn kho (dịch vụ) thì bỏ qua.
 export function moveStock(db, productId, delta, kind, refId) {
   const p = db.prepare('SELECT stock, track_stock FROM products WHERE id = ?').get(productId);
@@ -64,6 +66,11 @@ function addPayment(db, row) {
   );
 }
 
+// Ghi nợ thêm `add` có làm khách vượt hạn mức nợ không (hạn mức 0 = không giới hạn).
+export function overDebtLimit(customer, add) {
+  return add > 0 && customer.debt_limit > 0 && customer.debt + add > customer.debt_limit;
+}
+
 export function createInvoice(db, user, body) {
   const items = Array.isArray(body.items) ? body.items : [];
   if (!items.length) throw bad('Chưa có hàng trong hoá đơn');
@@ -121,6 +128,14 @@ export function createInvoice(db, user, body) {
           throw bad(`Đơn này đã thanh toán thành công (hoá đơn ${code}) nên không sửa rồi thanh toán lại được. Vào Hoá đơn để kiểm tra, rồi bấm + để mở đơn mới.`);
         }
         return getInvoice(db, previous.invoice_id, true);
+      }
+    }
+    if (debt > 0) {
+      const c = db.prepare('SELECT debt, debt_limit FROM customers WHERE id = ?').get(customerId);
+      // Chủ cửa hàng được bấm "vẫn ghi nợ"; nhân viên thì không
+      if (overDebtLimit(c, debt) && !(user.role === 'owner' && body.allow_over_limit === true)) {
+        throw bad(`Vượt hạn mức nợ: khách đang nợ ${vnd(c.debt)}, ghi thêm ${vnd(debt)} là ${vnd(c.debt + debt)}, quá hạn mức ${vnd(c.debt_limit)}.`
+          + (user.role === 'owner' ? '' : ' Hãy thu thêm tiền hoặc nhờ chủ cửa hàng duyệt.'));
       }
     }
     checkStock(db, lines);

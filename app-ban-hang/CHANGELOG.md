@@ -1,5 +1,9 @@
 # Nhật ký thay đổi
 
+## 1.0.0-rc.4.2
+
+- **Hạn mức nợ cho từng khách:** chủ cửa hàng đặt số nợ tối đa trong trang sửa khách (để 0 là không giới hạn). Khi bán ghi nợ mà tổng nợ sẽ vượt hạn mức, màn thanh toán báo ngay. Nhân viên không ghi nợ vượt được (phải thu thêm tiền), chủ cửa hàng bấm đồng ý thì vẫn ghi được. Khách trả đủ tiền thì vẫn bán bình thường.
+
 ## 1.0.0-rc.4.1
 
 - **Lập phiếu nhập từ gợi ý:** trong phiếu nhập bấm "📋 Thêm hàng cần nhập (theo gợi ý)", tick các món cần nhập, sửa số lượng rồi thêm cả loạt vào phiếu. Không phải gõ tìm từng món.

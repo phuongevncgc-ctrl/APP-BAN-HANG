@@ -218,3 +218,41 @@ test('bấm thanh toán 2 lần / gửi lại cùng mã: chỉ có 1 hoá đơn,
   const line = a.items[0].id;
   await assert.rejects(post('/returns', { invoice_id: a.id, items: [{ invoice_item_id: line, qty: 1 }, { invoice_item_id: line, qty: 1 }], refund_method: 'cash' }), /hai lần/);
 });
+
+test('hạn mức nợ: nhân viên bị chặn, chủ duyệt được, trả trước thì không vượt', async () => {
+  const sp = await post('/products', { name: 'Sơn hạn mức', price: 100000, cost: 60000, stock: 100 });
+  // Nhân viên tạo khách không đặt được hạn mức
+  const byStaff = await post('/customers', { name: 'Khách NV tạo', debt_limit: 500000 }, staffToken);
+  assert.equal(byStaff.debt_limit, 0);
+  const c = await post('/customers', { name: 'Thợ Hùng', debt_limit: 300000 });
+  assert.equal(c.debt_limit, 300000);
+  const sell = (qty, paid, tok, extra = {}) => post('/invoices', {
+    customer_id: c.id, items: [{ product_id: sp.id, qty, price: 100000 }],
+    payments: paid ? [{ method: 'cash', amount: paid }] : [], ...extra,
+  }, tok);
+
+  await sell(2, 0, staffToken); // nợ 200.000
+  // Ghi thêm 200.000 -> 400.000 > 300.000: nhân viên bị chặn, kho và nợ không đổi
+  await assert.rejects(sell(2, 0, staffToken, { allow_over_limit: true }), /Vượt hạn mức nợ.*200\.000đ.*400\.000đ.*300\.000đ.*chủ cửa hàng/);
+  assert.equal((await get(`/customers/${c.id}`)).debt, 200000);
+  assert.equal((await get(`/products/${sp.id}`)).stock, 98);
+  // Trả trước 100.000 -> nợ đúng 300.000, không vượt
+  await sell(2, 100000, staffToken);
+  assert.equal((await get(`/customers/${c.id}`)).debt, 300000);
+  // Trả đủ tiền thì vẫn bán bình thường dù đang ở hạn mức
+  await sell(1, 100000, staffToken);
+  // Chủ cửa hàng: phải bấm duyệt mới ghi nợ vượt được
+  await assert.rejects(sell(1, 0), /Vượt hạn mức nợ/);
+  await sell(1, 0, token, { allow_over_limit: true });
+  assert.equal((await get(`/customers/${c.id}`)).debt, 400000);
+  const pv = await get(`/customers/${c.id}/debt-preview?total=50000&paid=0`);
+  assert.equal(pv.debt_limit, 300000);
+  assert.equal(pv.over_limit, true);
+
+  // Nhân viên sửa khách không làm mất hạn mức; chủ đặt 0 là bỏ giới hạn
+  await call('PUT', `/customers/${c.id}`, { name: 'Thợ Hùng', debt_limit: 0 }, staffToken);
+  assert.equal((await get(`/customers/${c.id}`)).debt_limit, 300000);
+  await call('PUT', `/customers/${c.id}`, { name: 'Thợ Hùng', debt_limit: 0 });
+  await sell(1, 0, staffToken);
+  assert.equal((await get(`/customers/${c.id}`)).debt, 500000);
+});

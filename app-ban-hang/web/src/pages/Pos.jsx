@@ -17,6 +17,8 @@ const emptyCart = () => ({
 
 export const lineDiscount = (l) => (l.discMode === 'pct' ? Math.round((l.price * Math.min(l.discValue, 100)) / 100) : Math.min(l.discValue || 0, l.price));
 export const lineTotal = (l) => Math.round(l.qty * (l.price - lineDiscount(l)));
+// Ghi nợ thêm `add` có làm khách vượt hạn mức nợ không (giống máy chủ; hạn mức 0 = không giới hạn)
+const overLimit = (c, add) => !!c && add > 0 && c.debt_limit > 0 && (Number(c.debt) || 0) + add > c.debt_limit;
 
 function totals(cart) {
   const subtotal = cart.lines.reduce((s, l) => s + lineTotal(l), 0);
@@ -205,7 +207,9 @@ function Checkout({ cart, set, t, priceLists, onFinish, onDraft, onQuote, onPrev
     if (!customerId) return;
     let live = true;
     get(`/customers/${customerId}/debt-preview?total=0&paid=0`).then((d) => {
-      if (live && cart.customer?.id === customerId && d.old_debt !== cart.customer.debt) set({ customer: { ...cart.customer, debt: d.old_debt } });
+      if (live && cart.customer?.id === customerId && (d.old_debt !== cart.customer.debt || d.debt_limit !== cart.customer.debt_limit)) {
+        set({ customer: { ...cart.customer, debt: d.old_debt, debt_limit: d.debt_limit } });
+      }
     }).catch(() => {});
     return () => { live = false; };
   }, [customerId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -300,6 +304,7 @@ function Checkout({ cart, set, t, priceLists, onFinish, onDraft, onQuote, onPrev
             <div className="row-between"><span>Nợ trước hóa đơn</span><b>{money(oldDebt)}</b></div>
             <div className="row-between"><span>Phát sinh hóa đơn này</span><b className={newDebt > 0 ? 'neg' : 'pos'}>{money(newDebt)}</b></div>
             <div className="row-between big"><strong>Dự kiến tổng nợ sau bán</strong><b className={projectedDebt > 0 ? 'neg' : 'pos'}>{money(projectedDebt)}</b></div>
+            {overLimit(cart.customer, newDebt) && <div className="warn">⚠️ Vượt hạn mức nợ {money(cart.customer.debt_limit)}. Thu thêm tiền, hoặc chủ cửa hàng duyệt khi hoàn tất.</div>}
             <small className="muted">Số dư dự kiến. Chỉ ghi vào sổ khi hoàn tất hóa đơn thành công; tiền trả dư không tự trừ nợ cũ.</small>
           </div>
         );
@@ -504,6 +509,9 @@ export default function Pos() {
 
   const finish = async (autoPrint) => {
     if (t.debt > 0 && !cart.customer) return toast('Khách trả thiếu tiền. Hãy chọn khách để ghi nợ.', 'error');
+    const over = overLimit(cart.customer, t.debt);
+    if (over && !owner) return toast(`Vượt hạn mức nợ ${vnd(cart.customer.debt_limit)}. Thu thêm tiền hoặc nhờ chủ cửa hàng.`, 'error');
+    if (over && !confirmAsk(`Khách sẽ nợ ${vnd((Number(cart.customer.debt) || 0) + t.debt)}, quá hạn mức ${vnd(cart.customer.debt_limit)}. Vẫn ghi nợ?`)) return;
     const inv = await run(() => post('/invoices', {
       customer_id: cart.customer?.id ?? null,
       price_list_id: cart.priceListId,
@@ -514,6 +522,7 @@ export default function Pos() {
       draft_id: cart.draftId,
       // Mã chống trùng: bấm 2 lần hoặc mạng chập chờn gửi lại thì không tạo thêm hoá đơn
       request_key: typeof cart.key === 'string' ? cart.key : undefined,
+      allow_over_limit: over || undefined,
     }));
     if (!inv) return;
     setCarts((cs) => {

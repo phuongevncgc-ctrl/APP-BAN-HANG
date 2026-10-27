@@ -1,9 +1,10 @@
 // Khách hàng, nhà cung cấp, nhân viên.
 import { Router } from 'express';
 import { tx, nextCode, fold } from '../db.js';
-import { requireOwner, hashPassword } from '../auth.js';
+import { requireOwner, hashPassword, isOwner } from '../auth.js';
 import { bad, notFound, money, str, idOrNull, METHODS, day } from '../util.js';
 import { customerLedger, supplierLedger } from '../ledger.js';
+import { overDebtLimit } from './sales.js';
 
 export default function peopleRoutes(db) {
   const r = Router();
@@ -13,7 +14,7 @@ export default function peopleRoutes(db) {
     const q = fold(req.query.q);
     const raw = str(req.query.q, 50);
     const byDebt = req.query.sort === 'debt';
-    const rows = db.prepare(`SELECT c.id, c.code, c.name, c.phone, c.address, c.debt, c.price_list_id, pl.name AS price_list_name
+    const rows = db.prepare(`SELECT c.id, c.code, c.name, c.phone, c.address, c.debt, c.debt_limit, c.price_list_id, pl.name AS price_list_name
         ${byDebt ? ", (SELECT MAX(created_at) FROM invoices WHERE customer_id = c.id AND status = 'done') AS last_buy" : ''}
       FROM customers c LEFT JOIN price_lists pl ON pl.id = c.price_list_id
       WHERE c.active = 1 AND (? = '' OR c.search LIKE ? OR c.phone LIKE ? OR c.code LIKE ?)
@@ -66,6 +67,7 @@ export default function peopleRoutes(db) {
       tax_code: str(body.tax_code, 30),
       note: str(body.note, 500),
       price_list_id: idOrNull(body.price_list_id),
+      debt_limit: money(body.debt_limit, 'Hạn mức nợ'),
     };
   }
 
@@ -75,8 +77,10 @@ export default function peopleRoutes(db) {
       throw bad('Số điện thoại này đã có khách khác');
     }
     const code = str(req.body.code, 50) || nextCode(db, 'customers', 'KH');
-    const { lastInsertRowid } = db.prepare(`INSERT INTO customers (code, name, search, phone, address, tax_code, note, price_list_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(code, f.name, f.search, f.phone, f.address, f.tax_code, f.note, f.price_list_id);
+    // Chỉ chủ cửa hàng được đặt hạn mức nợ
+    const { lastInsertRowid } = db.prepare(`INSERT INTO customers (code, name, search, phone, address, tax_code, note, price_list_id, debt_limit)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(code, f.name, f.search, f.phone, f.address, f.tax_code, f.note, f.price_list_id,
+      isOwner(req) ? f.debt_limit : 0);
     res.json(db.prepare('SELECT * FROM customers WHERE id = ?').get(lastInsertRowid));
   });
 
@@ -84,6 +88,9 @@ export default function peopleRoutes(db) {
     const f = readCustomer(req.body);
     db.prepare(`UPDATE customers SET name=?, search=?, phone=?, address=?, tax_code=?, note=?, price_list_id=? WHERE id=?`)
       .run(f.name, f.search, f.phone, f.address, f.tax_code, f.note, f.price_list_id, Number(req.params.id));
+    if (isOwner(req) && req.body.debt_limit !== undefined) {
+      db.prepare('UPDATE customers SET debt_limit = ? WHERE id = ?').run(f.debt_limit, Number(req.params.id));
+    }
     res.json({ ok: true });
   });
 
@@ -95,7 +102,7 @@ export default function peopleRoutes(db) {
   // PSell 1.0 Beta: xem trước công nợ ngay tại POS, không ghi dữ liệu.
   // Tiền thanh toán hóa đơn mới không được tự ý trừ nợ cũ.
   r.get('/customers/:id/debt-preview', (req, res) => {
-    const customer = db.prepare('SELECT id, code, name, debt FROM customers WHERE id = ? AND active = 1')
+    const customer = db.prepare('SELECT id, code, name, debt, debt_limit FROM customers WHERE id = ? AND active = 1')
       .get(Number(req.params.id));
     if (!customer) throw notFound('Không tìm thấy khách hàng');
     const invoiceTotal = money(req.query.total, 'Tổng tiền hóa đơn');
@@ -104,6 +111,7 @@ export default function peopleRoutes(db) {
     const newDebt = invoiceTotal - invoicePaid;
     res.json({ customer, old_debt: customer.debt, invoice_total: invoiceTotal,
       invoice_paid: invoicePaid, new_debt: newDebt, projected_debt: customer.debt + newDebt,
+      debt_limit: customer.debt_limit, over_limit: overDebtLimit(customer, newDebt),
       note: 'Số liệu xem trước, sẽ đối chiếu lại sau khi lưu giao dịch.' });
   });
 

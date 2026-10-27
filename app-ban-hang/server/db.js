@@ -344,6 +344,10 @@ const SCHEMA = [
     invoice_id INTEGER NOT NULL UNIQUE REFERENCES invoices(id)
   );
   `,
+  // v6: hạn mức nợ của khách (0 = không giới hạn)
+  `
+  ALTER TABLE customers ADD COLUMN debt_limit INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function openDb(file) {
