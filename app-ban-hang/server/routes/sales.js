@@ -4,6 +4,7 @@ import { Router } from 'express';
 import { tx, nextCode } from '../db.js';
 import { requireOwner, isOwner } from '../auth.js';
 import { bad, notFound, money, qty as toQty, str, idOrNull, payments, day, METHODS } from '../util.js';
+import { debtInvoices } from '../ledger.js';
 
 const vnd = (n) => `${Math.round(n).toLocaleString('vi-VN')}đ`;
 
@@ -181,7 +182,10 @@ export function getInvoice(db, id, withCost) {
   return inv;
 }
 
-export function createReturn(db, user, body) {
+// Tính phiếu trả hàng (dùng cho cả xem trước và lưu thật, nên số trên màn hình luôn khớp).
+// Tiền hàng trả trừ vào phần nợ còn lại của chính hoá đơn đó trước; chỉ phần khách đã trả mới hoàn tiền.
+// Chọn "Trừ vào nợ" thì trừ hết vào nợ (dư thành tiền cửa hàng giữ của khách).
+function planReturn(db, body) {
   const inv = db.prepare('SELECT * FROM invoices WHERE id = ?').get(idOrNull(body.invoice_id));
   if (!inv) throw notFound('Không tìm thấy hoá đơn');
   if (inv.status !== 'done') throw bad('Hoá đơn đã huỷ, không trả hàng được');
@@ -196,22 +200,39 @@ export function createReturn(db, user, body) {
   // Phần giảm giá cả hoá đơn được chia đều theo tỷ lệ cho từng món.
   const ratio = inv.subtotal > 0 ? inv.total / inv.subtotal : 1;
   const getItem = db.prepare('SELECT * FROM invoice_items WHERE id = ? AND invoice_id = ?');
+  const refunded = db.prepare('SELECT COALESCE(SUM(total),0) AS s FROM return_items WHERE invoice_item_id = ?');
   const lines = wanted.map((w) => {
     const it = getItem.get(idOrNull(w.invoice_item_id), inv.id);
     if (!it) throw bad('Có món không thuộc hoá đơn này');
     const q = toQty(w.qty);
     const left = Math.round((it.qty - it.returned_qty) * 1000) / 1000;
     if (q > left) throw bad(`"${it.name}" chỉ còn trả được ${left}`);
-    const unit = Math.round((it.price - it.discount) * ratio);
+    // Tiền còn lại của dòng sau các lần trả trước: không bao giờ hoàn quá số này
+    const remain = Math.max(0, Math.round(it.total * ratio) - refunded.get(it.id).s);
     // Trả hết phần còn lại thì hoàn đúng số tiền còn lại của dòng, tránh lệch do làm tròn.
-    const total = q === left
-      ? Math.round(it.total * ratio) - db.prepare('SELECT COALESCE(SUM(total),0) AS s FROM return_items WHERE invoice_item_id = ?').get(it.id).s
-      : Math.round(q * unit);
-    return { it, qty: q, price: unit, total: Math.max(0, total) };
+    const total = q === left ? remain : Math.min(remain, Math.round(q * (it.price - it.discount) * ratio));
+    return { it, qty: q, price: Math.round((it.price - it.discount) * ratio), total };
   });
   const total = lines.reduce((s, l) => s + l.total, 0);
+  let debtReduced = 0;
+  if (method === 'debt') debtReduced = total;
+  else if (inv.customer_id) {
+    const c = db.prepare('SELECT debt FROM customers WHERE id = ?').get(inv.customer_id);
+    const owing = debtInvoices(db, inv.customer_id, c.debt).find((x) => x.id === inv.id)?.owing ?? 0;
+    debtReduced = Math.min(total, owing);
+  }
+  return { inv, lines, method, total, debt_reduced: debtReduced, refund: total - debtReduced };
+}
 
+export function previewReturn(db, body) {
+  const { lines, method, total, debt_reduced, refund } = planReturn(db, body);
+  return { total, debt_reduced, refund, refund_method: method,
+    items: lines.map((l) => ({ invoice_item_id: l.it.id, qty: l.qty, total: l.total })) };
+}
+
+export function createReturn(db, user, body) {
   return tx(db, () => {
+    const { inv, lines, method, total, debt_reduced, refund } = planReturn(db, body);
     const code = nextCode(db, 'returns', 'TH');
     const { lastInsertRowid: id } = db.prepare(`INSERT INTO returns (code, invoice_id, customer_id, user_id, total, note)
       VALUES (?, ?, ?, ?, ?, ?)`).run(code, inv.id, inv.customer_id, user.id, total, str(body.note));
@@ -221,12 +242,9 @@ export function createReturn(db, user, body) {
       db.prepare('UPDATE invoice_items SET returned_qty = returned_qty + ? WHERE id = ?').run(l.qty, l.it.id);
       moveLineStock(db, l.it.product_id, l.it.components, l.qty * l.it.factor, 'return', id);
     }
-    if (method === 'debt') {
-      db.prepare('UPDATE customers SET debt = debt - ? WHERE id = ?').run(total, inv.customer_id);
-    } else if (total > 0) {
-      addPayment(db, { kind: 'return', ref_id: id, customer_id: inv.customer_id, method, amount: -total, user_id: user.id });
-    }
-    return { id: Number(id), code, total, refund_method: method };
+    if (debt_reduced) db.prepare('UPDATE customers SET debt = debt - ? WHERE id = ?').run(debt_reduced, inv.customer_id);
+    if (refund > 0) addPayment(db, { kind: 'return', ref_id: id, customer_id: inv.customer_id, method, amount: -refund, user_id: user.id });
+    return { id: Number(id), code, total, refund_method: method, debt_reduced, refund };
   });
 }
 
@@ -362,6 +380,8 @@ export default function salesRoutes(db) {
   r.get('/invoices/:id', (req, res) => res.json(getInvoice(db, Number(req.params.id), isOwner(req))));
 
   r.post('/invoices/:id/cancel', requireOwner, (req, res) => res.json(cancelInvoice(db, req.user, Number(req.params.id))));
+
+  r.post('/returns/preview', (req, res) => res.json(previewReturn(db, req.body)));
 
   r.post('/returns', (req, res) => res.json(createReturn(db, req.user, req.body)));
 

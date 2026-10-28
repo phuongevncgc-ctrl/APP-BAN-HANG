@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { tx, nextCode, fold } from '../db.js';
 import { requireOwner, hashPassword, isOwner } from '../auth.js';
 import { bad, notFound, money, str, idOrNull, METHODS, day } from '../util.js';
-import { customerLedger, supplierLedger } from '../ledger.js';
+import { customerLedger, supplierLedger, debtInvoices } from '../ledger.js';
 import { overDebtLimit } from './sales.js';
 
 export default function peopleRoutes(db) {
@@ -42,17 +42,10 @@ export default function peopleRoutes(db) {
     c.total_bought = db.prepare("SELECT COALESCE(SUM(total),0) AS s FROM invoices WHERE customer_id = ? AND status = 'done'").get(c.id).s;
     c.total_returned = db.prepare('SELECT COALESCE(SUM(total),0) AS s FROM returns WHERE customer_id = ?').get(c.id).s;
     // Tuổi nợ: các hoá đơn còn nợ tính từ cũ nhất (nợ trả dần trừ vào hoá đơn cũ trước)
-    let left = Math.max(c.debt, 0);
-    const owing = [];
-    for (const inv of db.prepare(`SELECT id, code, created_at, debt FROM invoices
-      WHERE customer_id = ? AND status = 'done' AND debt > 0 ORDER BY id DESC`).all(c.id)) {
-      if (left <= 0) break;
-      const amount = Math.min(inv.debt, left);
-      left -= amount;
-      owing.push({ ...inv, owing: amount, age_days: Math.floor((Date.now() - new Date(inv.created_at.replace(' ', 'T')).getTime()) / 86400000) });
-    }
-    c.debt_invoices = owing.reverse();
-    c.max_debt_age = owing.reduce((m, x) => Math.max(m, x.age_days), 0);
+    c.debt_invoices = debtInvoices(db, c.id, c.debt).map((inv) => ({
+      ...inv, age_days: Math.floor((Date.now() - new Date(inv.created_at.replace(' ', 'T')).getTime()) / 86400000),
+    }));
+    c.max_debt_age = c.debt_invoices.reduce((m, x) => Math.max(m, x.age_days), 0);
     res.json(c);
   });
 

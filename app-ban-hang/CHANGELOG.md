@@ -1,5 +1,15 @@
 # Nhật ký thay đổi
 
+## 1.0.0-rc.4.3
+
+Rà lại công nợ và trả hàng của khách:
+
+- **Trả hàng hoá đơn còn nợ không còn hoàn nhầm tiền:** trước đây khách mua 1.000.000, trả 400.000, nợ 600.000, rồi trả lại hàng mà chọn "Tiền mặt" thì app hoàn đủ 1.000.000 tiền mặt và vẫn giữ nợ 600.000. Nay tiền hàng trả trừ vào phần nợ còn lại của chính hoá đơn đó trước, chỉ đưa lại phần khách đã trả (400.000). Hoá đơn đã trả đủ, hoặc khách đã thu nợ xong, thì vẫn hoàn đủ tiền như cũ. Nợ của hoá đơn khác không bị đụng tới.
+- **Số tiền trên màn trả hàng khớp đúng từng đồng** với phiếu lưu (máy chủ tính sẵn): trước đây trả hết một dòng có giảm giá hoá đơn có thể hiện lệch 1đ so với số thật. Màn hình ghi rõ: tiền hàng trả, trừ vào nợ bao nhiêu, đưa lại bao nhiêu.
+- Trả lẻ nhiều lần không bao giờ hoàn quá tiền của dòng hàng.
+- Sổ công nợ ghi rõ phiếu "Trả hàng (trừ nợ + hoàn tiền)".
+- Thêm bài kiểm tra: hoá đơn nợ một phần, trả nhiều lần, thu nợ xong mới trả, nợ hoá đơn khác, trừ hết vào nợ (nợ âm), giảm giá hoá đơn + đơn vị quy đổi, huỷ hoá đơn đã thu nợ một phần.
+
 ## 1.0.0-rc.4.2
 
 - **Hạn mức nợ cho từng khách:** chủ cửa hàng đặt số nợ tối đa trong trang sửa khách (để 0 là không giới hạn). Khi bán ghi nợ mà tổng nợ sẽ vượt hạn mức, màn thanh toán báo ngay. Nhân viên không ghi nợ vượt được (phải thu thêm tiền), chủ cửa hàng bấm đồng ý thì vẫn ghi được. Khách trả đủ tiền thì vẫn bán bình thường.
