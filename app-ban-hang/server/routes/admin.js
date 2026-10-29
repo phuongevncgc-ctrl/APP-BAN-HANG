@@ -86,8 +86,11 @@ export function report(db, from, to) {
     byHour, topCustomers, byCategory,
     expenses, otherIncome, netProfit: revenue - cost - expenses + otherIncome,
     byDay, topProducts, cashflow, methods, byUser,
-    customerDebt: db.prepare('SELECT COALESCE(SUM(debt),0) AS s FROM customers WHERE active = 1').get().s,
-    supplierDebt: db.prepare('SELECT COALESCE(SUM(debt),0) AS s FROM suppliers WHERE active = 1').get().s,
+    // Nợ phải thu chỉ cộng khách đang nợ; tiền cửa hàng giữ của khách (nợ âm) tách riêng, không bù trừ
+    customerDebt: db.prepare('SELECT COALESCE(SUM(debt),0) AS s FROM customers WHERE active = 1 AND debt > 0').get().s,
+    customerCredit: -db.prepare('SELECT COALESCE(SUM(debt),0) AS s FROM customers WHERE active = 1 AND debt < 0').get().s,
+    supplierDebt: db.prepare('SELECT COALESCE(SUM(debt),0) AS s FROM suppliers WHERE active = 1 AND debt > 0').get().s,
+    supplierCredit: -db.prepare('SELECT COALESCE(SUM(debt),0) AS s FROM suppliers WHERE active = 1 AND debt < 0').get().s,
     stockValue: Math.round(db.prepare('SELECT COALESCE(SUM(MAX(stock,0) * cost),0) AS s FROM products WHERE active = 1 AND track_stock = 1').get().s),
     lowStock: db.prepare('SELECT COUNT(*) AS n FROM products WHERE active = 1 AND track_stock = 1 AND stock <= min_stock').get().n,
   };

@@ -6,6 +6,8 @@ import { bad, notFound, money, str, idOrNull, METHODS, day } from '../util.js';
 import { customerLedger, supplierLedger, debtInvoices } from '../ledger.js';
 import { overDebtLimit } from './sales.js';
 
+const vnd = (n) => `${Math.round(n).toLocaleString('vi-VN')}đ`;
+
 export default function peopleRoutes(db) {
   const r = Router();
 
@@ -87,7 +89,15 @@ export default function peopleRoutes(db) {
     res.json({ ok: true });
   });
 
+  // Khách / NCC còn nợ (hoặc còn giữ tiền) mà xoá thì số nợ bị ẩn khỏi mọi báo cáo: bắt tất toán trước
+  const assertNoDebt = (table, id, who) => {
+    const debt = db.prepare(`SELECT debt FROM ${table} WHERE id = ?`).get(id)?.debt ?? 0;
+    if (debt > 0) throw bad(`${who} còn nợ ${vnd(debt)}. Thu / trả hết nợ rồi mới xoá được.`);
+    if (debt < 0) throw bad(`${who} còn ${vnd(-debt)} tiền chưa tất toán. Tất toán rồi mới xoá được.`);
+  };
+
   r.delete('/customers/:id', requireOwner, (req, res) => {
+    assertNoDebt('customers', Number(req.params.id), 'Khách này');
     db.prepare('UPDATE customers SET active = 0 WHERE id = ?').run(Number(req.params.id));
     res.json({ ok: true });
   });
@@ -165,6 +175,7 @@ export default function peopleRoutes(db) {
     res.json({ ok: true });
   });
   r.delete('/suppliers/:id', requireOwner, (req, res) => {
+    assertNoDebt('suppliers', Number(req.params.id), 'Nhà cung cấp này');
     db.prepare('UPDATE suppliers SET active = 0 WHERE id = ?').run(Number(req.params.id));
     res.json({ ok: true });
   });

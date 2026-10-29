@@ -223,7 +223,9 @@ export default function Reports() {
             <h4>Tổng quan cửa hàng</h4>
             <div className="cards">
               <Stat label="Khách đang nợ" value={money(r.customerDebt)} tone="neg" onClick={() => go('khach-hang')} />
+              {r.customerCredit > 0 && <Stat label="Tiền giữ của khách" value={money(r.customerCredit)} onClick={() => go('khach-hang')} />}
               <Stat label="Nợ nhà cung cấp" value={money(r.supplierDebt)} onClick={() => go('nhap-hang')} />
+              {r.supplierCredit > 0 && <Stat label="NCC còn nợ lại mình" value={money(r.supplierCredit)} onClick={() => go('nhap-hang')} />}
               <Stat label="Giá trị tồn kho" value={money(r.stockValue)} />
               <Stat label="Hàng sắp hết" value={num(r.lowStock)} tone={r.lowStock ? 'neg' : ''} onClick={() => go('hang-hoa')} />
             </div>

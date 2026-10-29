@@ -1,5 +1,12 @@
 # Nhật ký thay đổi
 
+## 1.0.0-rc.4.4
+
+Rà tiếp công nợ (ngày 2):
+
+- **"Khách đang nợ" ở Báo cáo nay đúng bằng tổng nợ ở trang Khách hàng.** Trước đây báo cáo cộng cả tiền cửa hàng đang giữ của khách (nợ âm, vd khách trả hàng trừ vào nợ còn dư) nên số nợ phải thu bị nhỏ đi. Nay tách riêng ô "Tiền giữ của khách". Nợ nhà cung cấp cũng tách tương tự. Tin nhắn báo cáo cuối ngày dùng số mới.
+- **Không xoá được khách / nhà cung cấp còn nợ.** Trước đây xoá khách đang nợ thì số nợ biến mất khỏi mọi báo cáo. Nay app báo "còn nợ … , thu hết nợ rồi mới xoá được".
+
 ## 1.0.0-rc.4.3
 
 Rà lại công nợ và trả hàng của khách:

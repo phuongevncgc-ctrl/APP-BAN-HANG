@@ -133,3 +133,29 @@ test('huỷ hoá đơn đã thu nợ một phần: nợ, sổ quỹ và sổ cô
   const l = await get(`/customers/${c}/ledger`);
   assert.equal(l.opening, 0);
 });
+
+test('báo cáo: tổng khách nợ không bị tiền giữ của khách (nợ âm) bù trừ, khớp trang khách hàng', async () => {
+  const before = await get('/reports/summary');
+  const stats0 = await get('/customers/stats');
+  assert.equal(before.customerDebt, stats0.debt_total);
+  const no = (await post('/customers', { name: 'Khách nợ 300k' })).id;
+  const giu = (await post('/customers', { name: 'Khách có tiền gửi' })).id;
+  await post('/invoices', { customer_id: no, items: [{ product_id: son, qty: 1, price: 300000 }], payments: [] });
+  const inv = await post('/invoices', { customer_id: giu, items: [{ product_id: son, qty: 1, price: 100000 }], payments: [{ method: 'cash', amount: 100000 }] });
+  await post('/returns', { invoice_id: inv.id, items: [{ invoice_item_id: inv.items[0].id, qty: 1 }], refund_method: 'debt' }); // giữ 100k của khách
+  const r = await get('/reports/summary');
+  assert.equal(r.customerDebt - before.customerDebt, 300000);
+  assert.equal(r.customerCredit - before.customerCredit, 100000);
+  assert.equal(r.customerDebt, (await get('/customers/stats')).debt_total);
+});
+
+test('không xoá được khách / NCC còn nợ (nợ bị ẩn khỏi mọi báo cáo)', async () => {
+  const c = (await post('/customers', { name: 'Khách sắp xoá' })).id;
+  await post('/invoices', { customer_id: c, items: [{ product_id: son, qty: 1, price: 50000 }], payments: [] });
+  await assert.rejects(call('DELETE', `/customers/${c}`), /còn nợ 50\.000đ/);
+  await post(`/customers/${c}/pay`, { amount: 50000 });
+  await call('DELETE', `/customers/${c}`);
+  const s = (await post('/suppliers', { name: 'NCC sắp xoá' })).id;
+  await post('/purchases', { supplier_id: s, items: [{ product_id: son, qty: 1, cost: 70000 }], paid: 0 });
+  await assert.rejects(call('DELETE', `/suppliers/${s}`), /còn nợ 70\.000đ/);
+});
