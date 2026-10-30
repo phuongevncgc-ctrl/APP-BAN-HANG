@@ -1,5 +1,9 @@
 # Nhật ký thay đổi
 
+## 1.0.0-rc.4.5
+
+- **Chiết khấu khi thu nợ nay trừ vào "Lãi sau chi phí".** Trước đây khách nợ 1.000.000, chú bớt 50.000 chỉ thu 950.000 thì nợ về 0 nhưng 50.000 bớt đó không hiện ở đâu trong lãi, nên lãi bị cao hơn thực tế. Báo cáo có thêm ô "Chiết khấu thu nợ", tin nhắn cuối ngày cũng ghi.
+
 ## 1.0.0-rc.4.4
 
 Rà tiếp công nợ (ngày 2):

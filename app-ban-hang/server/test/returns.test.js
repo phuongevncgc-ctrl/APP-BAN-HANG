@@ -159,3 +159,18 @@ test('không xoá được khách / NCC còn nợ (nợ bị ẩn khỏi mọi b
   await post('/purchases', { supplier_id: s, items: [{ product_id: son, qty: 1, cost: 70000 }], paid: 0 });
   await assert.rejects(call('DELETE', `/suppliers/${s}`), /còn nợ 70\.000đ/);
 });
+
+test('chiết khấu khi thu nợ được trừ vào lãi sau chi phí (trước đây bị bỏ sót)', async () => {
+  const before = await get('/reports/summary');
+  const c = (await post('/customers', { name: 'Khách bớt nợ' })).id;
+  await post('/invoices', { customer_id: c, items: [{ product_id: son, qty: 1, price: 1000000 }], payments: [] });
+  await post(`/customers/${c}/pay`, { amount: 950000, discount: 50000, method: 'cash' });
+  assert.equal(await debtOf(c), 0);
+  const r = await get('/reports/summary');
+  assert.equal(r.debtDiscount - (before.debtDiscount ?? 0), 50000);
+  // Lãi gộp không đổi theo chiết khấu, lãi sau chi phí giảm đúng 50.000
+  const gross = (r.profit - before.profit);
+  assert.equal(r.netProfit - before.netProfit, gross - 50000);
+  // Tiền thật thu vào chỉ 950.000
+  assert.equal(r.cashflow.cash - before.cashflow.cash, 950000);
+});

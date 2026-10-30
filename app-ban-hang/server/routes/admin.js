@@ -59,6 +59,9 @@ export function report(db, from, to) {
   for (const e of entries) cashflow[e.method] += e.kind === 'in' ? e.amount : -e.amount;
   const expenses = entries.filter((e) => e.category === 'expense').reduce((s, e) => s + e.amount, 0);
   const otherIncome = entries.filter((e) => e.category === 'other_in').reduce((s, e) => s + e.amount, 0);
+  // Chiết khấu khi thu nợ khách: nợ giảm mà không thu được tiền, nên là khoản bớt lãi
+  const debtDiscount = db.prepare(`SELECT COALESCE(SUM(discount),0) AS s FROM payments
+    WHERE kind = 'debt_in' AND date(created_at) BETWEEN ? AND ?`).get(from, to).s;
 
   const byUser = db.prepare(`SELECT u.name, COUNT(*) AS count, SUM(i.total) AS total FROM invoices i
     LEFT JOIN users u ON u.id = i.user_id WHERE i.status = 'done' AND date(i.created_at) BETWEEN ? AND ?
@@ -84,7 +87,7 @@ export function report(db, from, to) {
     from, to,
     sales, returns, revenue, cost, profit: revenue - cost,
     byHour, topCustomers, byCategory,
-    expenses, otherIncome, netProfit: revenue - cost - expenses + otherIncome,
+    expenses, otherIncome, debtDiscount, netProfit: revenue - cost - expenses - debtDiscount + otherIncome,
     byDay, topProducts, cashflow, methods, byUser,
     // Nợ phải thu chỉ cộng khách đang nợ; tiền cửa hàng giữ của khách (nợ âm) tách riêng, không bù trừ
     customerDebt: db.prepare('SELECT COALESCE(SUM(debt),0) AS s FROM customers WHERE active = 1 AND debt > 0').get().s,

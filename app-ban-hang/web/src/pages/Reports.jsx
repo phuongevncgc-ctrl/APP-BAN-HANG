@@ -210,7 +210,8 @@ export default function Reports() {
               <Stat label="Trả hàng" value={money(r.returns.total)} sub={`${r.returns.count} phiếu`} />
               <Stat label="Giảm giá HĐ" value={money(r.sales.discount)} />
               {(r.expenses > 0 || r.otherIncome > 0) && <Stat label="Chi phí (sổ quỹ)" value={money(r.expenses)} sub={r.otherIncome ? `Thu khác ${money(r.otherIncome)}` : ''} onClick={() => go('thu-chi')} />}
-              {(r.expenses > 0 || r.otherIncome > 0) && <Stat label="Lãi sau chi phí" value={money(r.netProfit)} tone={r.netProfit < 0 ? 'neg' : 'pos'} />}
+              {r.debtDiscount > 0 && <Stat label="Chiết khấu thu nợ" value={money(r.debtDiscount)} tone="neg" />}
+              {(r.expenses > 0 || r.otherIncome > 0 || r.debtDiscount > 0) && <Stat label="Lãi sau chi phí" value={money(r.netProfit)} tone={r.netProfit < 0 ? 'neg' : 'pos'} />}
             </div>
             <h4>Tiền thu chi trong kỳ</h4>
             <div className="cards">
