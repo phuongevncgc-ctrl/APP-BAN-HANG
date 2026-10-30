@@ -26,6 +26,47 @@ function SupplierForm({ supplier, onClose, onSaved }) {
 
 const lineNet = (l) => Math.round((l.cost * (100 - (l.ck || 0))) / 100);
 
+// Chọn hàng từ "Gợi ý nhập hàng" (Báo cáo) để thêm thẳng vào phiếu nhập, số lượng theo ĐVT gốc.
+function ReorderPicker({ onClose, onAdd }) {
+  const [days, setDays] = useState(30);
+  const [qty, setQty] = useState({});
+  const [off, setOff] = useState({});
+  const [run, busy] = useAction();
+  const state = useLoad(() => get(`/reports/products?days=${days}`), [days]);
+  const rows = state.data?.reorder ?? [];
+  const chosen = rows.filter((x) => !off[x.id] && (qty[x.id] ?? x.suggest) > 0);
+  const addAll = async () => {
+    // Lấy đủ ĐVT quy đổi, giá nhập lần cuối của từng món
+    const products = await run(() => Promise.all(chosen.map((x) => get(`/products/${x.id}`))));
+    if (products) onAdd(products.map((p, i) => ({ p, qty: qty[chosen[i].id] ?? chosen[i].suggest })));
+  };
+  return (
+    <Modal title="Thêm hàng cần nhập" onClose={onClose} wide
+      footer={<button className="btn btn-primary btn-lg btn-block" disabled={busy || !chosen.length} onClick={addAll}>Thêm {chosen.length} món vào phiếu</button>}>
+      <div className="chips">
+        {[30, 60, 90].map((d) => <button key={d} className={`chip ${days === d ? 'chip-on' : ''}`} onClick={() => setDays(d)}>Tính theo {d} ngày qua</button>)}
+      </div>
+      <p className="muted small">Hàng dưới tồn tối thiểu hoặc chỉ còn đủ bán dưới 7 ngày. Số gợi ý đủ bán thêm khoảng 30 ngày (theo ĐVT gốc), sửa được.</p>
+      <Loading state={state}>
+        {() => (
+          <div className="list">
+            {rows.length === 0 && <div className="empty">Chưa có hàng nào cần nhập</div>}
+            {rows.map((x) => (
+              <div key={x.id} className="list-item">
+                <input type="checkbox" checked={!off[x.id]} onChange={(e) => setOff({ ...off, [x.id]: !e.target.checked })} />
+                <span className="grow"><b>{x.name}</b>
+                  <small className="muted block">Tồn {num(x.stock)} {x.unit} · Bán/ngày {x.per_day ? num(x.per_day) : '—'}{x.cover_days !== null ? ` · đủ bán ${x.cover_days} ngày` : ''}</small>
+                </span>
+                <span style={{ width: 96 }}><QtyInput value={qty[x.id] ?? x.suggest} onChange={(v) => setQty({ ...qty, [x.id]: v })} /></span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Loading>
+    </Modal>
+  );
+}
+
 // Phiếu nhập hàng hoặc phiếu trả hàng cho NCC (mode = 'return')
 function StockForm({ mode, suppliers, onClose, onSaved, reloadSuppliers }) {
   const isReturn = mode === 'return';
@@ -39,16 +80,18 @@ function StockForm({ mode, suppliers, onClose, onSaved, reloadSuppliers }) {
   const toast = useToast();
   const total = lines.reduce((s, l) => s + Math.round(l.qty * lineNet(l)), 0);
 
-  const add = (p, unitId) => {
+  const add = (p, unitId, qty = 1) => {
     const opts = unitOptions(p, true);
     const o = opts.find((x) => x.unit_id === (unitId ?? null)) ?? opts[0];
     const baseCost = p.last_cost || p.cost || 0;
     setLines((ls) => {
       const found = ls.find((l) => l.product_id === p.id && l.unit_id === o.unit_id);
-      if (found) return ls.map((l) => (l === found ? { ...l, qty: l.qty + 1 } : l));
-      return [...ls, { key: Math.random(), product_id: p.id, name: p.name, price: p.price, baseCost, opts, unit_id: o.unit_id, unit: o.name, factor: o.factor, qty: 1, cost: Math.round(baseCost * o.factor), ck: 0 }];
+      if (found) return ls.map((l) => (l === found ? { ...l, qty: l.qty + qty } : l));
+      return [...ls, { key: Math.random(), product_id: p.id, name: p.name, price: p.price, baseCost, opts, unit_id: o.unit_id, unit: o.name, factor: o.factor, qty, cost: Math.round(baseCost * o.factor), ck: 0 }];
     });
   };
+  const owner = isOwner(useUser());
+  const [suggest, setSuggest] = useState(false);
   const setLine = (key, patch) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
 
   const save = async () => {
@@ -78,6 +121,7 @@ function StockForm({ mode, suppliers, onClose, onSaved, reloadSuppliers }) {
         </div>
       </Field>
       <ProductSearch onPick={add} showCost continuousScan />
+      {!isReturn && owner && <button className="btn btn-block" onClick={() => setSuggest(true)}>📋 Thêm hàng cần nhập (theo gợi ý)</button>}
       <div className="list">
         {lines.length === 0 && <div className="empty">Tìm hoặc quét hàng để thêm vào phiếu</div>}
         {lines.map((l) => {
@@ -129,6 +173,8 @@ function StockForm({ mode, suppliers, onClose, onSaved, reloadSuppliers }) {
         )}
       </div>
       <input className="input" placeholder="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} />
+      {suggest && <ReorderPicker onClose={() => setSuggest(false)}
+        onAdd={(picked) => { for (const x of picked) add(x.p, null, x.qty); setSuggest(false); toast(`Đã thêm ${picked.length} món vào phiếu`); }} />}
       {addSup && <SupplierForm onClose={() => setAddSup(false)} onSaved={(s) => { setAddSup(false); reloadSuppliers(); setSupplierId(String(s.id)); }} />}
     </Modal>
   );

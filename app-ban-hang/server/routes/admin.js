@@ -59,6 +59,9 @@ export function report(db, from, to) {
   for (const e of entries) cashflow[e.method] += e.kind === 'in' ? e.amount : -e.amount;
   const expenses = entries.filter((e) => e.category === 'expense').reduce((s, e) => s + e.amount, 0);
   const otherIncome = entries.filter((e) => e.category === 'other_in').reduce((s, e) => s + e.amount, 0);
+  // Chiết khấu khi thu nợ khách: nợ giảm mà không thu được tiền, nên là khoản bớt lãi
+  const debtDiscount = db.prepare(`SELECT COALESCE(SUM(discount),0) AS s FROM payments
+    WHERE kind = 'debt_in' AND date(created_at) BETWEEN ? AND ?`).get(from, to).s;
 
   const byUser = db.prepare(`SELECT u.name, COUNT(*) AS count, SUM(i.total) AS total FROM invoices i
     LEFT JOIN users u ON u.id = i.user_id WHERE i.status = 'done' AND date(i.created_at) BETWEEN ? AND ?
@@ -84,10 +87,13 @@ export function report(db, from, to) {
     from, to,
     sales, returns, revenue, cost, profit: revenue - cost,
     byHour, topCustomers, byCategory,
-    expenses, otherIncome, netProfit: revenue - cost - expenses + otherIncome,
+    expenses, otherIncome, debtDiscount, netProfit: revenue - cost - expenses - debtDiscount + otherIncome,
     byDay, topProducts, cashflow, methods, byUser,
-    customerDebt: db.prepare('SELECT COALESCE(SUM(debt),0) AS s FROM customers WHERE active = 1').get().s,
-    supplierDebt: db.prepare('SELECT COALESCE(SUM(debt),0) AS s FROM suppliers WHERE active = 1').get().s,
+    // Nợ phải thu chỉ cộng khách đang nợ; tiền cửa hàng giữ của khách (nợ âm) tách riêng, không bù trừ
+    customerDebt: db.prepare('SELECT COALESCE(SUM(debt),0) AS s FROM customers WHERE active = 1 AND debt > 0').get().s,
+    customerCredit: -db.prepare('SELECT COALESCE(SUM(debt),0) AS s FROM customers WHERE active = 1 AND debt < 0').get().s,
+    supplierDebt: db.prepare('SELECT COALESCE(SUM(debt),0) AS s FROM suppliers WHERE active = 1 AND debt > 0').get().s,
+    supplierCredit: -db.prepare('SELECT COALESCE(SUM(debt),0) AS s FROM suppliers WHERE active = 1 AND debt < 0').get().s,
     stockValue: Math.round(db.prepare('SELECT COALESCE(SUM(MAX(stock,0) * cost),0) AS s FROM products WHERE active = 1 AND track_stock = 1').get().s),
     lowStock: db.prepare('SELECT COUNT(*) AS n FROM products WHERE active = 1 AND track_stock = 1 AND stock <= min_stock').get().n,
   };
@@ -117,17 +123,18 @@ export function previousPeriod(db, from, to) {
 }
 
 // Hàng cần nhập thêm (tồn thấp hoặc sắp bán hết theo tốc độ bán) và hàng tồn lâu không bán.
-// Số lượng tính theo đơn vị gốc.
+// Số lượng tính theo đơn vị gốc. Số bán lấy từ thẻ kho để tính cả món bán qua combo;
+// hoá đơn huỷ và hàng khách trả đã cộng lại kho nên tự trừ ra.
 export function productAdvice(db, days) {
   const since = shiftDay(new Date().toLocaleDateString('sv'), -days + 1);
   const rows = db.prepare(`SELECT p.id, p.code, p.name, p.unit, p.stock, p.min_stock, p.cost, date(p.created_at) AS added,
-      COALESCE(s.sold, 0) AS sold, last.d AS last_sale
+      MAX(ROUND(COALESCE(s.sold, 0), 3), 0) AS sold, last.d AS last_sale
     FROM products p
-    LEFT JOIN (SELECT ii.product_id, SUM((ii.qty - ii.returned_qty) * ii.factor) AS sold FROM invoice_items ii
-      JOIN invoices i ON i.id = ii.invoice_id WHERE i.status = 'done' AND date(i.created_at) >= ? GROUP BY ii.product_id) s ON s.product_id = p.id
-    LEFT JOIN (SELECT ii.product_id, MAX(i.created_at) AS d FROM invoice_items ii
-      JOIN invoices i ON i.id = ii.invoice_id WHERE i.status = 'done' GROUP BY ii.product_id) last ON last.product_id = p.id
-    WHERE p.active = 1 AND p.track_stock = 1`).all(since);
+    LEFT JOIN (SELECT product_id, -SUM(qty) AS sold FROM stock_moves
+      WHERE kind IN ('sale','cancel','return') AND date(created_at) >= ? GROUP BY product_id) s ON s.product_id = p.id
+    LEFT JOIN (SELECT m.product_id, MAX(m.created_at) AS d FROM stock_moves m
+      JOIN invoices i ON i.id = m.ref_id AND i.status = 'done' WHERE m.kind = 'sale' GROUP BY m.product_id) last ON last.product_id = p.id
+    WHERE p.active = 1 AND p.track_stock = 1 AND p.is_combo = 0`).all(since);
   const reorder = [];
   const slow = [];
   let tooNew = 0;

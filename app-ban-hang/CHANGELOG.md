@@ -1,5 +1,39 @@
 # Nhật ký thay đổi
 
+## 1.0.0-rc.4.6
+
+- **Sửa lỗi gõ số lượng lẻ (vd 0,7) làm mất hàng trong giỏ.** Gõ số "0" đầu tiên (hoặc xoá trắng ô để gõ lại) thì app tưởng số lượng bằng 0 và xoá luôn dòng hàng. Nay gõ thoải mái, dòng hàng chỉ bị xoá khi bấm nút − lúc còn 1, hoặc vuốt "Xoá".
+
+## 1.0.0-rc.4.5
+
+- **Chiết khấu khi thu nợ nay trừ vào "Lãi sau chi phí".** Trước đây khách nợ 1.000.000, chú bớt 50.000 chỉ thu 950.000 thì nợ về 0 nhưng 50.000 bớt đó không hiện ở đâu trong lãi, nên lãi bị cao hơn thực tế. Báo cáo có thêm ô "Chiết khấu thu nợ", tin nhắn cuối ngày cũng ghi.
+
+## 1.0.0-rc.4.4
+
+Rà tiếp công nợ (ngày 2):
+
+- **"Khách đang nợ" ở Báo cáo nay đúng bằng tổng nợ ở trang Khách hàng.** Trước đây báo cáo cộng cả tiền cửa hàng đang giữ của khách (nợ âm, vd khách trả hàng trừ vào nợ còn dư) nên số nợ phải thu bị nhỏ đi. Nay tách riêng ô "Tiền giữ của khách". Nợ nhà cung cấp cũng tách tương tự. Tin nhắn báo cáo cuối ngày dùng số mới.
+- **Không xoá được khách / nhà cung cấp còn nợ.** Trước đây xoá khách đang nợ thì số nợ biến mất khỏi mọi báo cáo. Nay app báo "còn nợ … , thu hết nợ rồi mới xoá được".
+
+## 1.0.0-rc.4.3
+
+Rà lại công nợ và trả hàng của khách:
+
+- **Trả hàng hoá đơn còn nợ không còn hoàn nhầm tiền:** trước đây khách mua 1.000.000, trả 400.000, nợ 600.000, rồi trả lại hàng mà chọn "Tiền mặt" thì app hoàn đủ 1.000.000 tiền mặt và vẫn giữ nợ 600.000. Nay tiền hàng trả trừ vào phần nợ còn lại của chính hoá đơn đó trước, chỉ đưa lại phần khách đã trả (400.000). Hoá đơn đã trả đủ, hoặc khách đã thu nợ xong, thì vẫn hoàn đủ tiền như cũ. Nợ của hoá đơn khác không bị đụng tới.
+- **Số tiền trên màn trả hàng khớp đúng từng đồng** với phiếu lưu (máy chủ tính sẵn): trước đây trả hết một dòng có giảm giá hoá đơn có thể hiện lệch 1đ so với số thật. Màn hình ghi rõ: tiền hàng trả, trừ vào nợ bao nhiêu, đưa lại bao nhiêu.
+- Trả lẻ nhiều lần không bao giờ hoàn quá tiền của dòng hàng.
+- Sổ công nợ ghi rõ phiếu "Trả hàng (trừ nợ + hoàn tiền)".
+- Thêm bài kiểm tra: hoá đơn nợ một phần, trả nhiều lần, thu nợ xong mới trả, nợ hoá đơn khác, trừ hết vào nợ (nợ âm), giảm giá hoá đơn + đơn vị quy đổi, huỷ hoá đơn đã thu nợ một phần.
+
+## 1.0.0-rc.4.2
+
+- **Hạn mức nợ cho từng khách:** chủ cửa hàng đặt số nợ tối đa trong trang sửa khách (để 0 là không giới hạn). Khi bán ghi nợ mà tổng nợ sẽ vượt hạn mức, màn thanh toán báo ngay. Nhân viên không ghi nợ vượt được (phải thu thêm tiền), chủ cửa hàng bấm đồng ý thì vẫn ghi được. Khách trả đủ tiền thì vẫn bán bình thường.
+
+## 1.0.0-rc.4.1
+
+- **Lập phiếu nhập từ gợi ý:** trong phiếu nhập bấm "📋 Thêm hàng cần nhập (theo gợi ý)", tick các món cần nhập, sửa số lượng rồi thêm cả loạt vào phiếu. Không phải gõ tìm từng món.
+- **Gợi ý nhập hàng tính đúng hàng bán qua combo:** trước đây món bán trong combo (vd bán "Bộ kẹp" trừ 10 cái kẹp) không được tính vào tốc độ bán, nên không hiện trong "Cần nhập thêm" và có thể bị xếp nhầm vào "Bán chậm". Nay tính theo thẻ kho, đã trừ hàng khách trả và hoá đơn huỷ.
+
 ## 1.0.0-rc.4
 
 Gộp bản "RC2 Xem trước + Logo" của chú vào bản mới nhất, kiểm thử lại.

@@ -28,7 +28,8 @@ function remindDebt(c, settings) {
 }
 
 function CustomerForm({ customer, priceLists, onClose, onSaved }) {
-  const [f, setF] = useState(customer ?? { name: '', phone: '', address: '', tax_code: '', note: '', price_list_id: '' });
+  const owner = isOwner(useUser());
+  const [f, setF] = useState(customer ?? { name: '', phone: '', address: '', tax_code: '', note: '', price_list_id: '', debt_limit: 0 });
   const [run, busy] = useAction();
   const save = async () => {
     const body = { ...f, price_list_id: f.price_list_id || null };
@@ -50,6 +51,11 @@ function CustomerForm({ customer, priceLists, onClose, onSaved }) {
           {priceLists.map((pl) => <option key={pl.id} value={pl.id}>{pl.name}</option>)}
         </select>
       </Field>
+      {owner && (
+        <Field label="Hạn mức nợ" hint="Nợ vượt số này thì nhân viên không bán ghi nợ được nữa. Để 0 là không giới hạn.">
+          <MoneyInput value={f.debt_limit ?? 0} onChange={(v) => setF({ ...f, debt_limit: v })} />
+        </Field>
+      )}
       <Field label="Ghi chú"><input className="input" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></Field>
     </Modal>
   );
@@ -103,6 +109,7 @@ function CustomerDetail({ id, priceLists, onClose, onChanged }) {
             {c.price_list_name && <div>Bảng giá: <b>{c.price_list_name}</b></div>}
             <div className="cards">
               <div className="card stat"><small>Đang nợ</small><b className={c.debt > 0 ? 'neg' : ''}>{money(c.debt)}</b></div>
+              {c.debt_limit > 0 && <div className="card stat"><small>Hạn mức nợ</small><b className={c.debt > c.debt_limit ? 'neg' : ''}>{money(c.debt_limit)}</b></div>}
               <div className="card stat"><small>Nợ lâu nhất</small><b>{c.debt > 0 && c.debt_invoices.length ? `${c.max_debt_age} ngày` : '—'}</b></div>
               <div className="card stat"><small>Tổng mua</small><b>{money(c.total_bought - c.total_returned)}</b></div>
             </div>

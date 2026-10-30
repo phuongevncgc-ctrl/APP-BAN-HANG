@@ -8,24 +8,35 @@ import { useUser, isOwner, go } from '../App.jsx';
 function ReturnForm({ inv, onClose, onDone }) {
   const toast = useToast();
   const [qty, setQty] = useState({});
-  // Khách còn nợ thì mặc định trừ vào nợ, tránh trả tiền mặt cho hàng khách chưa trả tiền
-  const owes = inv.customer_id && inv.customer_debt > 0;
-  const [method, setMethod] = useState(owes ? 'debt' : 'cash');
+  const [method, setMethod] = useState('cash');
   const [note, setNote] = useState('');
+  const [plan, setPlan] = useState(null);
   const [run, busy] = useAction();
-  const ratio = inv.subtotal > 0 ? inv.total / inv.subtotal : 1;
   const left = (it) => Math.round((it.qty - it.returned_qty) * 1000) / 1000;
-  // Cách tính giống máy chủ: đơn giá sau giảm (đã chia giảm giá hoá đơn) làm tròn rồi nhân số lượng
-  const estimate = inv.items.reduce((s, it) => s + Math.round((qty[it.id] || 0) * Math.round((it.price - it.discount) * ratio)), 0);
+  const items = Object.entries(qty).filter(([, q]) => q > 0).map(([id, q]) => ({ invoice_item_id: Number(id), qty: q }));
+  const key = JSON.stringify([items, method]);
+  const dkey = useDebounced(key, 250);
+  // Số tiền lấy từ máy chủ (cùng công thức lúc lưu) nên luôn khớp với phiếu trả thật
+  useEffect(() => {
+    if (!items.length) return setPlan(null);
+    let live = true;
+    post('/returns/preview', { invoice_id: inv.id, items, refund_method: method })
+      .then((p) => live && setPlan({ ...p, key }))
+      .catch((e) => live && setPlan({ error: e.message, key }));
+    return () => { live = false; };
+  }, [dkey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ready = plan && plan.key === key && !plan.error;
   const submit = async () => {
-    const items = Object.entries(qty).filter(([, q]) => q > 0).map(([id, q]) => ({ invoice_item_id: Number(id), qty: q }));
     const r = await run(() => post('/returns', { invoice_id: inv.id, items, refund_method: method, note }));
-    if (r) toast(`Đã trả hàng ${r.code} · ${method === 'debt' ? 'Trừ nợ' : 'Hoàn'} ${vnd(r.total)}`);
-    if (r) onDone(r);
+    if (!r) return;
+    const parts = [r.debt_reduced ? `trừ nợ ${vnd(r.debt_reduced)}` : '', r.refund ? `hoàn ${vnd(r.refund)}` : ''].filter(Boolean).join(', ');
+    toast(`Đã trả hàng ${r.code} · ${parts || vnd(0)}`);
+    onDone(r);
   };
+  const label = !ready ? 'Trả hàng' : method === 'debt' || !plan.refund ? `Trả hàng · Trừ nợ ${vnd(plan.debt_reduced)}` : `Trả hàng · Hoàn ${vnd(plan.refund)}`;
   return (
     <Modal title={`Trả hàng - ${inv.code}`} onClose={onClose}
-      footer={<button className="btn btn-primary btn-lg btn-block" disabled={busy || !estimate} onClick={submit}>Trả hàng · Hoàn {vnd(estimate)}</button>}>
+      footer={<button className="btn btn-primary btn-lg btn-block" disabled={busy || !ready || !items.length} onClick={submit}>{label}</button>}>
       <div className="list">
         {inv.items.map((it) => (
           <div key={it.id} className="list-item">
@@ -43,12 +54,20 @@ function ReturnForm({ inv, onClose, onDone }) {
         ))}
       </div>
       <div className="seg">
-        {[['cash', 'Tiền mặt'], ['transfer', 'Chuyển khoản'], ...(inv.customer_id ? [['debt', 'Trừ vào nợ']] : [])].map(([k, l]) => (
+        {[['cash', 'Hoàn tiền mặt'], ['transfer', 'Hoàn chuyển khoản'], ...(inv.customer_id ? [['debt', 'Trừ hết vào nợ']] : [])].map(([k, l]) => (
           <button key={k} className={method === k ? 'on' : ''} onClick={() => setMethod(k)}>{l}</button>
         ))}
       </div>
-      {owes && method !== 'debt' && <div className="warn">⚠️ Khách đang nợ {money(inv.customer_debt)}. Thường nên chọn "Trừ vào nợ".</div>}
-      {method === 'debt' && estimate > (inv.customer_debt ?? 0) && <div className="muted small">Số trả lớn hơn số nợ: phần dư thành tiền cửa hàng còn giữ của khách (nợ âm), lần sau khách mua chọn "Ghi nợ" là tự trừ.</div>}
+      {plan?.error && plan.key === key && <div className="warn">{plan.error}</div>}
+      {ready && (
+        <div className="sumbox">
+          <div className="row-between"><span>Tiền hàng trả</span><b>{money(plan.total)}</b></div>
+          {plan.debt_reduced > 0 && <div className="row-between"><span>Trừ vào nợ</span><b>{money(plan.debt_reduced)}</b></div>}
+          {plan.refund > 0 && <div className="row-between big"><span>{method === 'transfer' ? 'Chuyển khoản lại cho khách' : 'Đưa lại tiền mặt'}</span><b>{money(plan.refund)}</b></div>}
+          {method !== 'debt' && plan.debt_reduced > 0 && <small className="muted">Hoá đơn này khách còn nợ nên tiền hàng trả trừ vào nợ trước, chỉ hoàn phần khách đã trả.</small>}
+          {method === 'debt' && plan.debt_reduced > Math.max(inv.customer_debt ?? 0, 0) && <small className="muted">Số trả lớn hơn số nợ: phần dư thành tiền cửa hàng còn giữ của khách (nợ âm), lần sau khách mua chọn "Ghi nợ" là tự trừ.</small>}
+        </div>
+      )}
       <input className="input" placeholder="Lý do trả (không bắt buộc)" value={note} onChange={(e) => setNote(e.target.value)} />
     </Modal>
   );

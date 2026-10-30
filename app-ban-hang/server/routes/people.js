@@ -1,9 +1,12 @@
 // Khách hàng, nhà cung cấp, nhân viên.
 import { Router } from 'express';
 import { tx, nextCode, fold } from '../db.js';
-import { requireOwner, hashPassword } from '../auth.js';
+import { requireOwner, hashPassword, isOwner } from '../auth.js';
 import { bad, notFound, money, str, idOrNull, METHODS, day } from '../util.js';
-import { customerLedger, supplierLedger } from '../ledger.js';
+import { customerLedger, supplierLedger, debtInvoices } from '../ledger.js';
+import { overDebtLimit } from './sales.js';
+
+const vnd = (n) => `${Math.round(n).toLocaleString('vi-VN')}đ`;
 
 export default function peopleRoutes(db) {
   const r = Router();
@@ -13,7 +16,7 @@ export default function peopleRoutes(db) {
     const q = fold(req.query.q);
     const raw = str(req.query.q, 50);
     const byDebt = req.query.sort === 'debt';
-    const rows = db.prepare(`SELECT c.id, c.code, c.name, c.phone, c.address, c.debt, c.price_list_id, pl.name AS price_list_name
+    const rows = db.prepare(`SELECT c.id, c.code, c.name, c.phone, c.address, c.debt, c.debt_limit, c.price_list_id, pl.name AS price_list_name
         ${byDebt ? ", (SELECT MAX(created_at) FROM invoices WHERE customer_id = c.id AND status = 'done') AS last_buy" : ''}
       FROM customers c LEFT JOIN price_lists pl ON pl.id = c.price_list_id
       WHERE c.active = 1 AND (? = '' OR c.search LIKE ? OR c.phone LIKE ? OR c.code LIKE ?)
@@ -41,17 +44,10 @@ export default function peopleRoutes(db) {
     c.total_bought = db.prepare("SELECT COALESCE(SUM(total),0) AS s FROM invoices WHERE customer_id = ? AND status = 'done'").get(c.id).s;
     c.total_returned = db.prepare('SELECT COALESCE(SUM(total),0) AS s FROM returns WHERE customer_id = ?').get(c.id).s;
     // Tuổi nợ: các hoá đơn còn nợ tính từ cũ nhất (nợ trả dần trừ vào hoá đơn cũ trước)
-    let left = Math.max(c.debt, 0);
-    const owing = [];
-    for (const inv of db.prepare(`SELECT id, code, created_at, debt FROM invoices
-      WHERE customer_id = ? AND status = 'done' AND debt > 0 ORDER BY id DESC`).all(c.id)) {
-      if (left <= 0) break;
-      const amount = Math.min(inv.debt, left);
-      left -= amount;
-      owing.push({ ...inv, owing: amount, age_days: Math.floor((Date.now() - new Date(inv.created_at.replace(' ', 'T')).getTime()) / 86400000) });
-    }
-    c.debt_invoices = owing.reverse();
-    c.max_debt_age = owing.reduce((m, x) => Math.max(m, x.age_days), 0);
+    c.debt_invoices = debtInvoices(db, c.id, c.debt).map((inv) => ({
+      ...inv, age_days: Math.floor((Date.now() - new Date(inv.created_at.replace(' ', 'T')).getTime()) / 86400000),
+    }));
+    c.max_debt_age = c.debt_invoices.reduce((m, x) => Math.max(m, x.age_days), 0);
     res.json(c);
   });
 
@@ -66,6 +62,7 @@ export default function peopleRoutes(db) {
       tax_code: str(body.tax_code, 30),
       note: str(body.note, 500),
       price_list_id: idOrNull(body.price_list_id),
+      debt_limit: money(body.debt_limit, 'Hạn mức nợ'),
     };
   }
 
@@ -75,8 +72,10 @@ export default function peopleRoutes(db) {
       throw bad('Số điện thoại này đã có khách khác');
     }
     const code = str(req.body.code, 50) || nextCode(db, 'customers', 'KH');
-    const { lastInsertRowid } = db.prepare(`INSERT INTO customers (code, name, search, phone, address, tax_code, note, price_list_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(code, f.name, f.search, f.phone, f.address, f.tax_code, f.note, f.price_list_id);
+    // Chỉ chủ cửa hàng được đặt hạn mức nợ
+    const { lastInsertRowid } = db.prepare(`INSERT INTO customers (code, name, search, phone, address, tax_code, note, price_list_id, debt_limit)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(code, f.name, f.search, f.phone, f.address, f.tax_code, f.note, f.price_list_id,
+      isOwner(req) ? f.debt_limit : 0);
     res.json(db.prepare('SELECT * FROM customers WHERE id = ?').get(lastInsertRowid));
   });
 
@@ -84,10 +83,21 @@ export default function peopleRoutes(db) {
     const f = readCustomer(req.body);
     db.prepare(`UPDATE customers SET name=?, search=?, phone=?, address=?, tax_code=?, note=?, price_list_id=? WHERE id=?`)
       .run(f.name, f.search, f.phone, f.address, f.tax_code, f.note, f.price_list_id, Number(req.params.id));
+    if (isOwner(req) && req.body.debt_limit !== undefined) {
+      db.prepare('UPDATE customers SET debt_limit = ? WHERE id = ?').run(f.debt_limit, Number(req.params.id));
+    }
     res.json({ ok: true });
   });
 
+  // Khách / NCC còn nợ (hoặc còn giữ tiền) mà xoá thì số nợ bị ẩn khỏi mọi báo cáo: bắt tất toán trước
+  const assertNoDebt = (table, id, who) => {
+    const debt = db.prepare(`SELECT debt FROM ${table} WHERE id = ?`).get(id)?.debt ?? 0;
+    if (debt > 0) throw bad(`${who} còn nợ ${vnd(debt)}. Thu / trả hết nợ rồi mới xoá được.`);
+    if (debt < 0) throw bad(`${who} còn ${vnd(-debt)} tiền chưa tất toán. Tất toán rồi mới xoá được.`);
+  };
+
   r.delete('/customers/:id', requireOwner, (req, res) => {
+    assertNoDebt('customers', Number(req.params.id), 'Khách này');
     db.prepare('UPDATE customers SET active = 0 WHERE id = ?').run(Number(req.params.id));
     res.json({ ok: true });
   });
@@ -95,7 +105,7 @@ export default function peopleRoutes(db) {
   // PSell 1.0 Beta: xem trước công nợ ngay tại POS, không ghi dữ liệu.
   // Tiền thanh toán hóa đơn mới không được tự ý trừ nợ cũ.
   r.get('/customers/:id/debt-preview', (req, res) => {
-    const customer = db.prepare('SELECT id, code, name, debt FROM customers WHERE id = ? AND active = 1')
+    const customer = db.prepare('SELECT id, code, name, debt, debt_limit FROM customers WHERE id = ? AND active = 1')
       .get(Number(req.params.id));
     if (!customer) throw notFound('Không tìm thấy khách hàng');
     const invoiceTotal = money(req.query.total, 'Tổng tiền hóa đơn');
@@ -104,6 +114,7 @@ export default function peopleRoutes(db) {
     const newDebt = invoiceTotal - invoicePaid;
     res.json({ customer, old_debt: customer.debt, invoice_total: invoiceTotal,
       invoice_paid: invoicePaid, new_debt: newDebt, projected_debt: customer.debt + newDebt,
+      debt_limit: customer.debt_limit, over_limit: overDebtLimit(customer, newDebt),
       note: 'Số liệu xem trước, sẽ đối chiếu lại sau khi lưu giao dịch.' });
   });
 
@@ -164,6 +175,7 @@ export default function peopleRoutes(db) {
     res.json({ ok: true });
   });
   r.delete('/suppliers/:id', requireOwner, (req, res) => {
+    assertNoDebt('suppliers', Number(req.params.id), 'Nhà cung cấp này');
     db.prepare('UPDATE suppliers SET active = 0 WHERE id = ?').run(Number(req.params.id));
     res.json({ ok: true });
   });

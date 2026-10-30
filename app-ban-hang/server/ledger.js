@@ -3,6 +3,21 @@
 // Nợ đầu kỳ được tính ngược từ nợ hiện tại nên khớp cả nợ cũ nhập từ app khác.
 import { notFound } from './util.js';
 
+// Hoá đơn nào còn nợ: nợ hiện tại của khách chia vào các hoá đơn ghi nợ gần nhất
+// (khách trả nợ dần thì trừ vào hoá đơn cũ trước). Trả về theo thứ tự cũ -> mới.
+export function debtInvoices(db, customerId, debt) {
+  let left = Math.max(debt, 0);
+  const owing = [];
+  for (const inv of db.prepare(`SELECT id, code, created_at, debt FROM invoices
+    WHERE customer_id = ? AND status = 'done' AND debt > 0 ORDER BY id DESC`).all(customerId)) {
+    if (left <= 0) break;
+    const amount = Math.min(inv.debt, left);
+    left -= amount;
+    owing.push({ ...inv, owing: amount });
+  }
+  return owing.reverse();
+}
+
 function finish(rows, currentDebt, from, to) {
   rows.sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.order - b.order));
   let balance = currentDebt - rows.reduce((s, r) => s + r.change, 0);
@@ -48,7 +63,7 @@ export function customerLedger(db, id, from, to) {
       COALESCE((SELECT -SUM(amount) FROM payments WHERE kind = 'return' AND ref_id = r.id), 0) AS refunded
     FROM returns r LEFT JOIN invoices i ON i.id = r.invoice_id WHERE r.customer_id = ?`).all(id)) {
     rows.push({ order: 2, created_at: r.created_at, code: r.code, ref: 'return', ref_id: r.id,
-      type: r.refunded ? 'Trả hàng (hoàn tiền)' : 'Trả hàng (trừ nợ)',
+      type: !r.refunded ? 'Trả hàng (trừ nợ)' : r.refunded < r.total ? 'Trả hàng (trừ nợ + hoàn tiền)' : 'Trả hàng (hoàn tiền)',
       amount: -r.total, paid: -r.refunded, discount: 0, change: -(r.total - r.refunded),
       note: [r.invoice_code && `HĐ ${r.invoice_code}`, r.note].filter(Boolean).join(' · ') });
   }

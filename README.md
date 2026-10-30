@@ -1,4 +1,4 @@
-# PSell 1.0.0-rc.4
+# PSell 1.0.0-rc.4.6
 
 **PSell** là phần mềm bán hàng cho cửa hàng nhỏ, chạy ngay trên máy Home Assistant trong nhà. Mở được trên điện thoại Android, iPhone và máy tính, chữ to, nút to, dễ bấm. Dữ liệu nằm trong nhà, không mất tiền thuê bao. Bản này là RC4 để chạy thử có kiểm soát, chưa phải bản Stable.
 
@@ -15,7 +15,7 @@
 - **Máy in qua IP**: máy in hoá đơn K80 và máy in tem mã vạch (cuộn 2 tem) cắm mạng cùng nhà với Home Assistant, in thẳng không cần cài driver.
 - **Thu chi, chốt ca, kiểm kho**: phiếu thu / chi, sổ quỹ, in phiếu chốt ca cuối ngày, phiếu kiểm kho nhiều món.
 - **Xuất Excel**: hàng hoá, hoá đơn, công nợ khách hàng và nhà cung cấp (tổng hợp + sổ chi tiết), in biên bản đối chiếu công nợ.
-- **Khách hàng & công nợ**: lịch sử mua, hoá đơn còn nợ, nợ lâu nhất bao nhiêu ngày, thu nợ có chiết khấu.
+- **Khách hàng & công nợ**: lịch sử mua, hoá đơn còn nợ, nợ lâu nhất bao nhiêu ngày, thu nợ có chiết khấu, hạn mức nợ từng khách.
 - **Nhập hàng**: phiếu nhập theo đơn vị bất kỳ, chiết khấu %, giá vốn bình quân, nợ nhà cung cấp.
 - **Kho**: thẻ kho (lịch sử nhập xuất), cân bằng kho, lọc hàng còn / hết / âm kho / sắp hết.
 - **Báo giá A4**, **giá bán lần trước** cho từng khách, **báo cáo xuất nhập tồn**.

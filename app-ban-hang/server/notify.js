@@ -51,7 +51,7 @@ export function dailyMessage(db, date) {
   const lines = [
     `Doanh thu: ${vnd(r.revenue)} (${r.sales.count} hoá đơn${r.returns.count ? `, trả hàng ${vnd(r.returns.total)}` : ''})`,
     `Lợi nhuận gộp: ${vnd(r.profit)}`,
-    `Chi phí: ${vnd(r.expenses)}${r.otherIncome ? ` · Thu khác: ${vnd(r.otherIncome)}` : ''}`,
+    `Chi phí: ${vnd(r.expenses)}${r.debtDiscount ? ` · Chiết khấu thu nợ: ${vnd(r.debtDiscount)}` : ''}${r.otherIncome ? ` · Thu khác: ${vnd(r.otherIncome)}` : ''}`,
     `Lãi ròng: ${vnd(r.netProfit)}`,
     `Tiền thu: mặt ${vnd(r.cashflow.cash)} · CK ${vnd(r.cashflow.transfer)}${r.cashflow.card ? ` · thẻ ${vnd(r.cashflow.card)}` : ''}`,
     `Khách nợ thêm: ${vnd(r.sales.debt)} · Thu nợ: ${vnd(debtIn)}`,
