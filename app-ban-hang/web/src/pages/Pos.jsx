@@ -167,7 +167,7 @@ function CartLine({ index, line, owner, last, onQty, onOpen, onRemove, onUseLast
             {owner && line.cost > 0 && line.price - disc < line.cost && <span className="tag-warn">dưới vốn</span>}
           </div>
           <div className="qty">
-            <button onClick={() => onQty(Math.max(0, Math.round((line.qty - 1) * 1000) / 1000))}>−</button>
+            <button onClick={() => (line.qty <= 1 ? onRemove() : onQty(Math.round((line.qty - 1) * 1000) / 1000))}>−</button>
             <QtyInput className="qty-input" value={line.qty} onChange={onQty} />
             <button onClick={() => onQty(Math.round((line.qty + 1) * 1000) / 1000)}>+</button>
           </div>
@@ -586,7 +586,8 @@ export default function Pos() {
                 const lp = lastPrices[`${l.product_id}:${l.unit_id ?? 0}`];
                 setLine(l.key, { price: lp.price, discMode: 'vnd', discValue: lp.discount });
               }}
-              onQty={(qty) => (qty <= 0 ? removeLine(l.key) : setLine(l.key, { qty }))}
+              // Đang gõ "0,7" thì ô tạm là 0: không được xoá dòng. Muốn xoá thì bấm − hoặc vuốt "Xoá".
+              onQty={(qty) => setLine(l.key, { qty })}
               onOpen={() => setEditing(l)}
               onRemove={() => removeLine(l.key)}
             />

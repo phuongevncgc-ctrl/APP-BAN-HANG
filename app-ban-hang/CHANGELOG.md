@@ -1,5 +1,9 @@
 # Nhật ký thay đổi
 
+## 1.0.0-rc.4.6
+
+- **Sửa lỗi gõ số lượng lẻ (vd 0,7) làm mất hàng trong giỏ.** Gõ số "0" đầu tiên (hoặc xoá trắng ô để gõ lại) thì app tưởng số lượng bằng 0 và xoá luôn dòng hàng. Nay gõ thoải mái, dòng hàng chỉ bị xoá khi bấm nút − lúc còn 1, hoặc vuốt "Xoá".
+
 ## 1.0.0-rc.4.5
 
 - **Chiết khấu khi thu nợ nay trừ vào "Lãi sau chi phí".** Trước đây khách nợ 1.000.000, chú bớt 50.000 chỉ thu 950.000 thì nợ về 0 nhưng 50.000 bớt đó không hiện ở đâu trong lãi, nên lãi bị cao hơn thực tế. Báo cáo có thêm ô "Chiết khấu thu nợ", tin nhắn cuối ngày cũng ghi.

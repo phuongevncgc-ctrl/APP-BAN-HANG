@@ -1,4 +1,4 @@
-# PSell 1.0.0-rc.4.5
+# PSell 1.0.0-rc.4.6
 
 **PSell** là phần mềm bán hàng cho cửa hàng nhỏ, chạy ngay trên máy Home Assistant trong nhà. Mở được trên điện thoại Android, iPhone và máy tính, chữ to, nút to, dễ bấm. Dữ liệu nằm trong nhà, không mất tiền thuê bao. Bản này là RC4 để chạy thử có kiểm soát, chưa phải bản Stable.
 
