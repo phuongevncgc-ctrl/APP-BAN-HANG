@@ -4,7 +4,7 @@ import { Router } from 'express';
 import { tx, nextCode } from '../db.js';
 import { requireOwner, isOwner } from '../auth.js';
 import { bad, notFound, money, qty as toQty, str, idOrNull, payments, day, METHODS } from '../util.js';
-import { debtInvoices } from '../ledger.js';
+import { debtInvoices, attachDebtLeft } from '../ledger.js';
 
 const vnd = (n) => `${Math.round(n).toLocaleString('vi-VN')}đ`;
 
@@ -179,6 +179,7 @@ export function getInvoice(db, id, withCost) {
   if (!withCost) for (const it of inv.items) delete it.cost;
   inv.payments = db.prepare("SELECT method, amount, created_at, note FROM payments WHERE kind = 'sale' AND ref_id = ? ORDER BY id").all(id);
   inv.returns = db.prepare('SELECT id, code, created_at, total FROM returns WHERE invoice_id = ? ORDER BY id').all(id);
+  attachDebtLeft(db, [inv]);
   return inv;
 }
 
@@ -360,12 +361,12 @@ export default function salesRoutes(db) {
 
   r.get('/invoices', (req, res) => {
     const f = invoiceFilter(req);
-    const rows = db.prepare(`SELECT i.id, i.code, i.created_at, i.total, i.paid, i.debt, i.status,
+    const rows = db.prepare(`SELECT i.id, i.code, i.created_at, i.total, i.paid, i.debt, i.status, i.customer_id,
         c.name AS customer_name, u.name AS user_name,
         (SELECT COALESCE(SUM(total),0) FROM returns r WHERE r.invoice_id = i.id) AS returned
       ${f.sql}
       ORDER BY i.id DESC LIMIT ${Math.min(Number(req.query.limit) || 500, 50000)}`).all(...f.args);
-    res.json(rows);
+    res.json(attachDebtLeft(db, rows));
   });
 
   // Tổng của toàn bộ hoá đơn khớp bộ lọc (danh sách chỉ hiện một phần)

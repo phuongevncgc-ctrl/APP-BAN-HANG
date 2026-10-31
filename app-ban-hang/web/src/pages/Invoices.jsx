@@ -120,7 +120,10 @@ export function InvoiceDetail({ id, onClose, onChanged }) {
                 <div key={i} className="row-between muted"><span>{METHOD_NAMES[p.method]} {p.note && `(${p.note})`}</span><span>{money(p.amount)}</span></div>
               ))}
               {inv.change_amount > 0 && <div className="row-between muted"><span>Tiền thối</span><span>{money(inv.change_amount)}</span></div>}
-              {inv.debt > 0 && <div className="row-between neg"><span>Ghi nợ</span><b>{money(inv.debt)}</b></div>}
+              {inv.debt > 0 && <div className="row-between"><span>Ghi nợ lúc bán</span><span>{money(inv.debt)}</span></div>}
+              {inv.debt > 0 && inv.status === 'done' && (inv.debt_left > 0
+                ? <div className="row-between neg"><span>Còn nợ hiện tại</span><b>{money(inv.debt_left)}</b></div>
+                : <div className="row-between pos"><span>Còn nợ hiện tại</span><b>Đã hết nợ</b></div>)}
               {inv.note && <div className="muted">Ghi chú: {inv.note}</div>}
             </div>
             {inv.returns.length > 0 && (
@@ -194,7 +197,9 @@ export default function Invoices({ route }) {
                       </span>
                       <span className="r">
                         <b>{money(r.total)}</b>
-                        {r.debt > 0 && <small className="neg block">Nợ {money(r.debt)}</small>}
+                        {r.debt > 0 && r.status === 'done' && (r.debt_left > 0
+                          ? <small className="neg block">Còn nợ {money(r.debt_left)}</small>
+                          : <small className="pos block">Đã hết nợ</small>)}
                       </span>
                     </button>
                   ))}
