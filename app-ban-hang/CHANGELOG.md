@@ -1,5 +1,9 @@
 # Nhật ký thay đổi
 
+## 1.0.0-rc.5
+
+- **Sửa lỗi nút "Cập nhật" trong Home Assistant bị mờ.** Các số phiên bản kiểu 1.0.0-rc.4.6, 1.0.0-rc.4.7 bị Home Assistant hiểu là *không mới hơn* 1.0.0-rc.4, nên báo "Up-to-date" và khoá nút Cập nhật. Từ bản này đánh số 1.0.0-rc.5, rc.6, … để Home Assistant nhận đúng bản mới. Nội dung giống rc.4.7, không đổi dữ liệu.
+
 ## 1.0.0-rc.4.7
 
 - **Hoá đơn hiện "Còn nợ" đúng theo thời điểm hiện tại.** Trước đây danh sách hoá đơn và trang khách luôn ghi "Nợ …" bằng số ghi nợ lúc bán, kể cả khi khách đã trả nợ hoặc đã trả hàng. Nay hiện "Còn nợ …" (đã trừ tiền thu nợ, trả dần vào hoá đơn cũ trước, và hàng trả lại) hoặc "Đã hết nợ". Chi tiết hoá đơn ghi cả "Ghi nợ lúc bán" và "Còn nợ hiện tại".

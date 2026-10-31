@@ -1,6 +1,6 @@
 # Cấu hình add-on Home Assistant
 name: PSell
-version: "1.0.0-rc.4.7"
+version: "1.0.0-rc.5"
 slug: ban_hang
 description: PSell - phần mềm bán hàng chạy ngay trên máy Home Assistant, dùng được trên điện thoại và máy tính
 url: https://github.com/phuongevncgc-ctrl/APP-BAN-HANG
