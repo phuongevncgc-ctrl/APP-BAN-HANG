@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { tx, nextCode, fold } from '../db.js';
 import { requireOwner, hashPassword, isOwner } from '../auth.js';
 import { bad, notFound, money, str, idOrNull, METHODS, day } from '../util.js';
-import { customerLedger, supplierLedger, debtInvoices } from '../ledger.js';
+import { customerLedger, supplierLedger, debtInvoices, attachDebtLeft } from '../ledger.js';
 import { overDebtLimit } from './sales.js';
 
 const vnd = (n) => `${Math.round(n).toLocaleString('vi-VN')}đ`;
@@ -37,8 +37,8 @@ export default function peopleRoutes(db) {
     const c = db.prepare(`SELECT c.*, pl.name AS price_list_name FROM customers c
       LEFT JOIN price_lists pl ON pl.id = c.price_list_id WHERE c.id = ?`).get(Number(req.params.id));
     if (!c) throw notFound('Không tìm thấy khách hàng');
-    c.invoices = db.prepare(`SELECT id, code, created_at, total, debt, status FROM invoices
-      WHERE customer_id = ? ORDER BY id DESC LIMIT 50`).all(c.id);
+    c.invoices = attachDebtLeft(db, db.prepare(`SELECT id, code, created_at, total, debt, status, customer_id FROM invoices
+      WHERE customer_id = ? ORDER BY id DESC LIMIT 50`).all(c.id));
     c.debt_payments = db.prepare(`SELECT created_at, method, amount, discount, note FROM payments
       WHERE customer_id = ? AND kind = 'debt_in' ORDER BY id DESC LIMIT 50`).all(c.id);
     c.total_bought = db.prepare("SELECT COALESCE(SUM(total),0) AS s FROM invoices WHERE customer_id = ? AND status = 'done'").get(c.id).s;

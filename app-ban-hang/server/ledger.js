@@ -18,6 +18,23 @@ export function debtInvoices(db, customerId, debt) {
   return owing.reverse();
 }
 
+// Gắn debt_left (nợ còn lại hiện tại của từng hoá đơn, sau thu nợ / trả hàng) vào danh sách hoá đơn.
+// Hoá đơn huỷ hoặc không ghi nợ thì 0. Mỗi khách chỉ tính một lần.
+export function attachDebtLeft(db, invoices) {
+  const byCustomer = new Map();
+  const debtOf = db.prepare('SELECT debt FROM customers WHERE id = ?');
+  for (const inv of invoices) {
+    inv.debt_left = 0;
+    if (inv.status !== 'done' || !(inv.debt > 0) || !inv.customer_id) continue;
+    if (!byCustomer.has(inv.customer_id)) {
+      const owing = debtInvoices(db, inv.customer_id, debtOf.get(inv.customer_id)?.debt ?? 0);
+      byCustomer.set(inv.customer_id, new Map(owing.map((x) => [x.id, x.owing])));
+    }
+    inv.debt_left = byCustomer.get(inv.customer_id).get(inv.id) ?? 0;
+  }
+  return invoices;
+}
+
 function finish(rows, currentDebt, from, to) {
   rows.sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.order - b.order));
   let balance = currentDebt - rows.reduce((s, r) => s + r.change, 0);

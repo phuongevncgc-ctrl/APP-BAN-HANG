@@ -174,3 +174,26 @@ test('chiết khấu khi thu nợ được trừ vào lãi sau chi phí (trướ
   // Tiền thật thu vào chỉ 950.000
   assert.equal(r.cashflow.cash - before.cashflow.cash, 950000);
 });
+
+test('hoá đơn hiện "còn nợ" đúng sau khi thu nợ / trả hàng (không giữ số nợ lúc bán)', async () => {
+  const c = (await post('/customers', { name: 'Khách xem nợ HĐ' })).id;
+  const a = await post('/invoices', { customer_id: c, items: [{ product_id: son, qty: 1, price: 500000 }], payments: [] });
+  const b = await post('/invoices', { customer_id: c, items: [{ product_id: son, qty: 1, price: 300000 }], payments: [{ method: 'cash', amount: 100000 }] });
+  assert.equal((await get(`/invoices/${a.id}`)).debt_left, 500000);
+  assert.equal((await get(`/invoices/${b.id}`)).debt_left, 200000);
+  // Thu 600.000: trả dần vào hoá đơn cũ trước -> A hết nợ, B còn 100.000
+  await post(`/customers/${c}/pay`, { amount: 600000 });
+  assert.equal((await get(`/invoices/${a.id}`)).debt_left, 0);
+  assert.equal((await get(`/invoices/${b.id}`)).debt_left, 100000);
+  // Trả hàng B: trừ 100.000 nợ còn lại, hoàn 200.000 -> B hết nợ
+  await post('/returns', { invoice_id: b.id, items: [{ invoice_item_id: b.items[0].id, qty: 1 }], refund_method: 'cash' });
+  assert.equal((await get(`/invoices/${b.id}`)).debt_left, 0);
+  // Danh sách hoá đơn cũng có cột còn nợ
+  const list = await get(`/invoices?q=${encodeURIComponent('Khách xem nợ HĐ')}&from=2000-01-01&to=2100-01-01`);
+  const byId = Object.fromEntries(list.map((x) => [x.id, x]));
+  assert.equal(byId[a.id].debt, 500000); // số ghi nợ lúc bán giữ nguyên
+  assert.equal(byId[a.id].debt_left, 0);
+  assert.equal(byId[b.id].debt_left, 0);
+  // Hoá đơn không ghi nợ: còn nợ 0
+  assert.equal(byId[a.id].debt_left + byId[b.id].debt_left, 0);
+});

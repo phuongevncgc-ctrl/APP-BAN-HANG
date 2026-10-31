@@ -144,7 +144,7 @@ function CustomerDetail({ id, priceLists, onClose, onChanged }) {
               {c.invoices.map((inv) => (
                 <a key={inv.id} className={`list-item ${inv.status === 'cancelled' ? 'faded' : ''}`} href={`#/hoa-don/${inv.id}`}>
                   <span className="grow"><b>{inv.code}</b><small className="muted block">{dateTime(inv.created_at)}</small></span>
-                  <span className="r"><b>{money(inv.total)}</b>{inv.debt > 0 && <small className="neg block">Nợ {money(inv.debt)}</small>}</span>
+                  <span className="r"><b>{money(inv.total)}</b>{inv.debt > 0 && inv.status === 'done' && (inv.debt_left > 0 ? <small className="neg block">Còn nợ {money(inv.debt_left)}</small> : <small className="pos block">Đã hết nợ</small>)}</span>
                 </a>
               ))}
             </div>

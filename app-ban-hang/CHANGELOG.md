@@ -1,5 +1,9 @@
 # Nhật ký thay đổi
 
+## 1.0.0-rc.4.7
+
+- **Hoá đơn hiện "Còn nợ" đúng theo thời điểm hiện tại.** Trước đây danh sách hoá đơn và trang khách luôn ghi "Nợ …" bằng số ghi nợ lúc bán, kể cả khi khách đã trả nợ hoặc đã trả hàng. Nay hiện "Còn nợ …" (đã trừ tiền thu nợ, trả dần vào hoá đơn cũ trước, và hàng trả lại) hoặc "Đã hết nợ". Chi tiết hoá đơn ghi cả "Ghi nợ lúc bán" và "Còn nợ hiện tại".
+
 ## 1.0.0-rc.4.6
 
 - **Sửa lỗi gõ số lượng lẻ (vd 0,7) làm mất hàng trong giỏ.** Gõ số "0" đầu tiên (hoặc xoá trắng ô để gõ lại) thì app tưởng số lượng bằng 0 và xoá luôn dòng hàng. Nay gõ thoải mái, dòng hàng chỉ bị xoá khi bấm nút − lúc còn 1, hoặc vuốt "Xoá".
